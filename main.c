@@ -213,7 +213,20 @@ void free_memory(struct Road* roads, int num_roads, struct Vehicle* vehicles, in
     }
 }
 
-int main(){
+void handle_terminal_relaunch(int argc, char *argv[]) {
+    if (argc == 1) {
+        char command[512];
+        snprintf(command, sizeof(command), "x-terminal-emulator -e %s --child &", argv[0]);
+        if (system(command) != -1) {
+            exit(0); // Exit the original process once the child is launched
+        }
+    }
+}
+
+int main(int argc, char *argv[]){
+    // Ensure the application is running in its own terminal window.
+    handle_terminal_relaunch(argc, argv);
+
     struct Road roads[2];
     struct Vehicle vehicles[2];
 
@@ -227,6 +240,11 @@ int main(){
     check_vehicle_collision(&vehicles[0], &vehicles[1]);
     check_dead_end(&vehicles[0], roads, 2);
     run_animation(roads, 2, vehicles, 2);
+
+    // Keep the terminal open until the user interacts.
+    printf("\nAnimation complete. Press Enter to close the window...");
+    getchar();
+
     free_memory(roads, 2, vehicles, 2);
     return 0;
 }
