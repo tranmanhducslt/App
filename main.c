@@ -65,17 +65,19 @@ void make_vehicle(struct Vehicle* vehicle, int x, int y, int r, int g, int b, in
     vehicle->num_pixels = length * width;
     vehicle->pixels = (struct Pixel**)malloc(vehicle->num_pixels * sizeof(struct Pixel*));
 
-    // Fill the pixels of the vehicle.
-    for(int i = 0; i < vehicle->num_pixels; i++){
-        vehicle->pixels[i] = (struct Pixel*)malloc(sizeof(struct Pixel));
-        vehicle->pixels[i]->x = x + i * dx;
-        vehicle->pixels[i]->y = y + i * dy;
-        // Set the color of the vehicle's pixels to its specified color.
-        vehicle->pixels[i]->r = vehicle->r;
-        vehicle->pixels[i]->g = vehicle->g;
-        vehicle->pixels[i]->b = vehicle->b;
-        // Initially, all pixels of the vehicle are lighted.
-        vehicle->pixels[i]->light = 1;
+    // Fill the pixels of the vehicle, starting from point (x, y) and expanding by (length) and (width).
+    for(int i = 0; i < vehicle->length; i++){
+        for(int j = 0; j < vehicle->width; j++){
+            vehicle->pixels[i * vehicle->width + j] = (struct Pixel*)malloc(sizeof(struct Pixel));
+            vehicle->pixels[i * vehicle->width + j]->x = x + i;
+            vehicle->pixels[i * vehicle->width + j]->y = y + j;
+            // Set the color of the vehicle's pixels.
+            vehicle->pixels[i * vehicle->width + j]->r = vehicle->r;
+            vehicle->pixels[i * vehicle->width + j]->g = vehicle->g;
+            vehicle->pixels[i * vehicle->width + j]->b = vehicle->b;
+            // Initially, all pixels of the vehicle are lighted.
+            vehicle->pixels[i * vehicle->width + j]->light = 1;
+        }
     }
 }
 
@@ -234,7 +236,7 @@ int main(int argc, char *argv[]){
     make_road(&roads[1], 10, 0, 13, 19);
 
     make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 1, 0, 3, 1);
-    make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 1, 3);
+    make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 3);
 
     make_map(roads, 2, vehicles, 2);
     check_vehicle_collision(&vehicles[0], &vehicles[1]);
