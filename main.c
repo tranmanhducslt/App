@@ -230,10 +230,10 @@ int main(int argc, char *argv[]){
     struct Road roads[2];
     struct Vehicle vehicles[2];
 
-    make_road(&roads[0], 0, 5, 19, 6);
-    make_road(&roads[1], 10, 0, 11, 19);
+    make_road(&roads[0], 0, 5, 19, 8);
+    make_road(&roads[1], 10, 0, 13, 19);
 
-    make_vehicle(&vehicles[0], 0, 5, 255, 0, 0, 1, 0, 3, 1);
+    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 1, 0, 3, 1);
     make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 1, 3);
 
     make_map(roads, 2, vehicles, 2);
