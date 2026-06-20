@@ -310,8 +310,8 @@ void draw_scene(struct Road* roads, int num_roads, struct Vehicle* vehicles, int
     }
 }
 
-void run_animation(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide){
-    for(int step = 0; step < 12; step++){
+void run_animation(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide, int stepCount){
+    for(int step = 0; step < stepCount; step++){
         // Predict imminent collisions across all vehicle pixels before moving.
         for(int i = 0; i < num_vehicles; i++){
             for(int j = i + 1; j < num_vehicles; j++){
@@ -484,8 +484,8 @@ int main(int argc, char *argv[]){
     // Ensure the application is running in its own terminal window.
     handle_terminal_relaunch(argc, argv);
 
-    // Preset # of roads and vehicles.
-    int roadNum = 3, vehiNum = 2, canvaSide = 30;
+    // Preset figures.
+    int roadNum = 3, vehiNum = 2, canvaSide = 30, stepCount = 15;
 
     struct Road roads[roadNum];
     struct Vehicle vehicles[vehiNum];
@@ -515,7 +515,7 @@ int main(int argc, char *argv[]){
         printf("Prediction: vehicles will not collide within the next 3 steps.\n");
     }
 
-    run_animation(roads, roadNum, vehicles, vehiNum, canvaSide);
+    run_animation(roads, roadNum, vehicles, vehiNum, canvaSide, stepCount);
 
     // Keep the terminal open until the user interacts.
     printf("\nAnimation complete. Press Enter to close the window...");
