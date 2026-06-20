@@ -132,7 +132,8 @@ void check_vehicle_collision(struct Vehicle* vehicle1, struct Vehicle* vehicle2)
     printf("No collision detected between Vehicle 1 and Vehicle 2.\n");
 }
 
-void check_dead_end(struct Vehicle* vehicle, struct Road* roads, int num_roads){
+/*
+int check_dead_end(struct Vehicle* vehicle, struct Road* roads, int num_roads){
     // Check if the vehicle has reached a dead end by checking if its next position is on a road.
     int next_x = vehicle->x + vehicle->dx;
     int next_y = vehicle->y + vehicle->dy;
@@ -140,12 +141,14 @@ void check_dead_end(struct Vehicle* vehicle, struct Road* roads, int num_roads){
         for(int j = 0; j < roads[i].length * roads[i].width; j++){
             if(roads[i].pixels[j]->x == next_x && roads[i].pixels[j]->y == next_y){
                 printf("Vehicle is not at a dead end. Next position (%d, %d) is on a road.\n", next_x, next_y);
-                return;
+                return 0;
             }
         }
     }
     printf("Vehicle has reached a dead end at (%d, %d).\n", next_x, next_y);
+    return 1;
 }
+*/
 
 int predict_pixel_collision(int x1, int y1, int dx1, int dy1,
                            int x2, int y2, int dx2, int dy2,
@@ -485,7 +488,11 @@ int main(int argc, char *argv[]){
     handle_terminal_relaunch(argc, argv);
 
     // Preset figures.
-    int roadNum = 3, vehiNum = 2, canvaSide = 30, stepCount = 15;
+    int roadNum = 3, 
+        vehiNum = 3, 
+        canvaSide = 30, 
+        stepCount = 15,
+        maxSteps = 3;
 
     struct Road roads[roadNum];
     struct Vehicle vehicles[vehiNum];
@@ -494,8 +501,9 @@ int main(int argc, char *argv[]){
     make_road(&roads[1], 10, 0, 13, 29);
     make_road(&roads[2], 10, 12, 29, 15);
 
-    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 1, 0, 3, 1);
+    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 2, 0, 3, 1);
     make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
+    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -2, 0, 5, 1);
 
     // Resize the terminal to match the canvas before drawing.
     resize_terminal(canvaSide + 6, canvaSide + 2);
@@ -506,13 +514,12 @@ int main(int argc, char *argv[]){
 
     make_map(roads, roadNum, vehicles, vehiNum);
     check_vehicle_collision(&vehicles[0], &vehicles[1]);
-    check_dead_end(&vehicles[0], roads, roadNum);
 
-    int collision_predicted = predict_vehicles_collision(&vehicles[0], &vehicles[1], 3);
+    int collision_predicted = predict_vehicles_collision(&vehicles[0], &vehicles[1], maxSteps);
     if(collision_predicted){
-        printf("Prediction: vehicles will collide within the next 3 steps unless stopped.\n");
+        printf("Prediction: vehicles will collide within the next %d steps unless stopped.\n", maxSteps);
     } else {
-        printf("Prediction: vehicles will not collide within the next 3 steps.\n");
+        printf("Prediction: vehicles will not collide within the next %d steps.\n", maxSteps);
     }
 
     run_animation(roads, roadNum, vehicles, vehiNum, canvaSide, stepCount);
