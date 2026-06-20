@@ -513,15 +513,6 @@ int main(int argc, char *argv[]){
     g_num_vehicles = vehiNum;
 
     make_map(roads, roadNum, vehicles, vehiNum);
-    check_vehicle_collision(&vehicles[0], &vehicles[1]);
-
-    int collision_predicted = predict_vehicles_collision(&vehicles[0], &vehicles[1], maxSteps);
-    if(collision_predicted){
-        printf("Prediction: vehicles will collide within the next %d steps unless stopped.\n", maxSteps);
-    } else {
-        printf("Prediction: vehicles will not collide within the next %d steps.\n", maxSteps);
-    }
-
     run_animation(roads, roadNum, vehicles, vehiNum, canvaSide, stepCount);
 
     // Keep the terminal open until the user interacts.
