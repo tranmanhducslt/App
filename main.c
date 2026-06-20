@@ -332,7 +332,7 @@ int main(int argc, char *argv[]){
     int roadNum = 3, 
         vehiNum = 3, 
         canvaSide = 30, 
-        stepCount = 20,
+        stepCount = 15,
         maxSteps = 4; // Lookahead time window horizon
 
     // Initialize 3D Spacetime Memory
@@ -347,7 +347,7 @@ int main(int argc, char *argv[]){
 
     make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 2, 0, 3, 1);
     make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
-    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -2, 0, 5, 1);
+    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -3, 0, 5, 1);
 
     resize_terminal(canvaSide + 6, canvaSide + 2);
 
