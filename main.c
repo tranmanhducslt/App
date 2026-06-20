@@ -456,7 +456,7 @@ int main(int argc, char *argv[]){
 
     make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 2, 0, 3, 1);
     make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
-    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -2, 0, 5, 1);
+    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -3, 0, 5, 1);
 
     // Resize the terminal to match the canvas before drawing.
     resize_terminal(canvaSide + 6, canvaSide + 2);
