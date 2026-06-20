@@ -117,21 +117,6 @@ void move_vehicle(struct Vehicle* vehicle){
     vehicle->y += vehicle->dy;
 }
 
-void check_vehicle_collision(struct Vehicle* vehicle1, struct Vehicle* vehicle2){
-    // Check if two vehicles collide by comparing their pixels' positions.
-    for(int i = 0; i < vehicle1->num_pixels; i++){
-        for(int j = 0; j < vehicle2->num_pixels; j++){
-            if(vehicle1->pixels[i]->x == vehicle2->pixels[j]->x &&
-               vehicle1->pixels[i]->y == vehicle2->pixels[j]->y){
-                printf("Collision detected between Vehicle 1 and Vehicle 2 at (%d, %d)\n",
-                    vehicle1->pixels[i]->x, vehicle1->pixels[i]->y);
-                return;
-            }
-        }
-    }
-    printf("No collision detected between Vehicle 1 and Vehicle 2.\n");
-}
-
 /*
 int check_dead_end(struct Vehicle* vehicle, struct Road* roads, int num_roads){
     // Check if the vehicle has reached a dead end by checking if its next position is on a road.
@@ -450,39 +435,6 @@ void handle_terminal_relaunch(int argc, char *argv[]) {
     // No terminal found: continue in current terminal.
 }
 
-int colli_avoid(struct Pixel* front_pixel, int steps){
-    // Check a 7x7 area centered on front_pixel (offsets -3..3 in x and y).
-    // For any pixel present in that area (from any vehicle in the global registry),
-    // predict whether it will collide with front_pixel within `distance` steps.
-    if(front_pixel == NULL) return 0;
-    if(g_vehicles == NULL || g_num_vehicles == 0) return 0;
-
-    for(int oy = -3; oy <= 3; oy++){
-        for(int ox = -3; ox <= 3; ox++){
-            int nx = front_pixel->x + ox;
-            int ny = front_pixel->y + oy;
-
-            // Skip checking the centre pixel (same pixel) - optional.
-            if(ox == 0 && oy == 0) continue;
-
-            // Scan all known vehicle pixels to see if any occupy (nx, ny).
-            for(int vi = 0; vi < g_num_vehicles; vi++){
-                struct Vehicle* v = &g_vehicles[vi];
-                for(int pi = 0; pi < v->num_pixels; pi++){
-                    struct Pixel* p = v->pixels[pi];
-                    if(p->x == nx && p->y == ny){
-                        // Found a lit pixel in the area; predict collision.
-                        if(predict_pixel_collision_from_pixels(front_pixel, p, steps)){
-                            return 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
-
 int main(int argc, char *argv[]){
     // Ensure the application is running in its own terminal window.
     handle_terminal_relaunch(argc, argv);
@@ -497,6 +449,7 @@ int main(int argc, char *argv[]){
     struct Road roads[roadNum];
     struct Vehicle vehicles[vehiNum];
 
+    // Create starting positions.
     make_road(&roads[0], 0, 5, 29, 8);
     make_road(&roads[1], 10, 0, 13, 29);
     make_road(&roads[2], 10, 12, 29, 15);
@@ -512,6 +465,7 @@ int main(int argc, char *argv[]){
     g_vehicles = vehicles;
     g_num_vehicles = vehiNum;
 
+    // Visualise in a terminal window.
     make_map(roads, roadNum, vehicles, vehiNum);
     run_animation(roads, roadNum, vehicles, vehiNum, canvaSide, stepCount);
 
