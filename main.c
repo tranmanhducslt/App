@@ -88,38 +88,56 @@ void make_road(struct Road* road, int x1, int y1, int x2, int y2){
     }
 }
 
+void build_vehicle_pixels(struct Vehicle* vehicle) {
+    vehicle->num_pixels = vehicle->length * vehicle->width;
+    vehicle->pixels = (struct Pixel**)malloc(vehicle->num_pixels * sizeof(struct Pixel*));
+    for(int i = 0; i < vehicle->length; i++){
+        for(int j = 0; j < vehicle->width; j++){
+            int idx = i * vehicle->width + j;
+            vehicle->pixels[idx] = (struct Pixel*)malloc(sizeof(struct Pixel));
+            vehicle->pixels[idx]->x = vehicle->x + i;
+            vehicle->pixels[idx]->y = vehicle->y + j;
+            vehicle->pixels[idx]->r = vehicle->r;
+            vehicle->pixels[idx]->g = vehicle->g;
+            vehicle->pixels[idx]->b = vehicle->b;
+            vehicle->pixels[idx]->dx = vehicle->dx;
+            vehicle->pixels[idx]->dy = vehicle->dy;
+        }
+    }
+}
+
 void make_vehicle(struct Vehicle* vehicle, int x, int y, int r, int g, int b, int dx, int dy, int length, int width){
     vehicle->x = x; vehicle->y = y;
     vehicle->r = r; vehicle->g = g; vehicle->b = b;
     vehicle->dx = dx; vehicle->dy = dy;
     vehicle->orig_dx = dx; vehicle->orig_dy = dy;
     vehicle->length = length; vehicle->width = width;
-    vehicle->num_pixels = length * width;
-    vehicle->pixels = (struct Pixel**)malloc(vehicle->num_pixels * sizeof(struct Pixel*));
-
-    for(int i = 0; i < vehicle->length; i++){
-        for(int j = 0; j < vehicle->width; j++){
-            vehicle->pixels[i * vehicle->width + j] = (struct Pixel*)malloc(sizeof(struct Pixel));
-            vehicle->pixels[i * vehicle->width + j]->x = x + i;
-            vehicle->pixels[i * vehicle->width + j]->y = y + j;
-            vehicle->pixels[i * vehicle->width + j]->r = vehicle->r;
-            vehicle->pixels[i * vehicle->width + j]->g = vehicle->g;
-            vehicle->pixels[i * vehicle->width + j]->b = vehicle->b;
-            vehicle->pixels[i * vehicle->width + j]->dx = dx;
-            vehicle->pixels[i * vehicle->width + j]->dy = dy;
-        }
-    }
+    build_vehicle_pixels(vehicle);
 }
 
-void make_map(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles){
-    printf("Map:\n");
-    for(int i = 0; i < num_roads; i++){
-        printf("Road %d: (%d, %d) to (%d, %d)\n", i, roads[i].x1, roads[i].y1, roads[i].x2, roads[i].y2);
+void turn_and_flip_vehicle(struct Vehicle* v, int new_dx, int new_dy, int target_x, int target_y) {
+    int current_horizontal = (v->orig_dx != 0);
+    int new_horizontal = (new_dx != 0);
+    
+    if (current_horizontal != new_horizontal) {
+        int temp = v->length;
+        v->length = v->width;
+        v->width = temp;
     }
-    for(int i = 0; i < num_vehicles; i++){
-        printf("Vehicle %d: Position (%d, %d), Direction (%d, %d)\n",
-            i, vehicles[i].x, vehicles[i].y, vehicles[i].dx, vehicles[i].dy);
+
+    for (int i = 0; i < v->num_pixels; i++) {
+        free(v->pixels[i]);
     }
+    free(v->pixels);
+
+    v->x = target_x;
+    v->y = target_y;
+    v->dx = new_dx;
+    v->dy = new_dy;
+    v->orig_dx = new_dx;
+    v->orig_dy = new_dy;
+
+    build_vehicle_pixels(v);
 }
 
 void move_vehicle(struct Vehicle* vehicle){
@@ -270,7 +288,14 @@ void draw_scene(struct Road* roads, int num_roads, struct Vehicle* vehicles, int
 void run_animation(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide, int stepCount){
     for(int step = 0; step < stepCount; step++){
         
-        // Dynamic reservation and speed correction pass
+        /*
+        if (step == 6) {
+            printf("\n--- Routing Event: Vehicle 1 is turning right & flipping structural dimensions! ---\n");
+            turn_and_flip_vehicle(&vehicles[1], -2, 0, 14, 12);
+            usleep(1000000); 
+        }
+        */
+
         apply_spacetime_arbitration();
 
         printf("\033[2J\033[H");
@@ -310,7 +335,7 @@ void handle_terminal_relaunch(int argc, char *argv[]) {
             if (system(cmd) != -1) exit(0);
         }
     }
-    const char *candidates[] = {"x-terminal-emulator", "xterm", "gnome-terminal", "konsole", "alacritty", "kitty", "urxvt", "st", NULL};
+    const char *candidates[] = {"x-terminal-emulator", "xterm", "gnome-terminal", "konsole", "alacritty", "kitty", "urvxt", "st", NULL};
     for (int i = 0; candidates[i]; i++) {
         const char *term = candidates[i];
         snprintf(cmd, sizeof(cmd), "command -v %s >/dev/null 2>&1", term);
@@ -331,33 +356,33 @@ int main(int argc, char *argv[]){
     // Grid properties (Ready to upscale to 100+)
     int roadNum = 3, 
         vehiNum = 3, 
-        canvaSide = 30, 
-        stepCount = 15,
+        canvaSide = 40, 
+        stepCount = 20,
         maxSteps = 4; // Lookahead time window horizon
 
-    // Initialize 3D Spacetime Memory
     init_spacetime_grid(canvaSide, maxSteps);
 
     struct Road roads[roadNum];
     struct Vehicle vehicles[vehiNum];
 
-    make_road(&roads[0], 0, 5, 29, 8);
-    make_road(&roads[1], 10, 0, 13, 29);
-    make_road(&roads[2], 10, 12, 29, 15);
+    make_road(&roads[0], 0, 5, 39, 8);
+    make_road(&roads[1], 10, 0, 15, 39);
+    make_road(&roads[2], 10, 12, 39, 15);
 
-    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 2, 0, 3, 1);
-    make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
-    make_vehicle(&vehicles[2], 20, 5, 0, 0, 255, -3, 0, 5, 1);
+    make_vehicle(&vehicles[0], 0, 7, 255, 0, 0, 2, 0, 3, 1);
+    make_vehicle(&vehicles[1], 11, 0, 0, 255, 0, 0, 1, 2, 4);
+    make_vehicle(&vehicles[2], 30, 5, 0, 0, 255, -3, 0, 5, 1);
 
+    // Resize window to accommodate size for the map.
     resize_terminal(canvaSide + 6, canvaSide + 2);
 
     g_vehicles = vehicles;
     g_num_vehicles = vehiNum;
 
-    make_map(roads, roadNum, vehicles, vehiNum);
+    draw_scene(roads, roadNum, vehicles, vehiNum, canvaSide);
     run_animation(roads, roadNum, vehicles, vehiNum, canvaSide, stepCount);
 
-    printf("\nAnimation complete. Press Enter to close the window...");
+    printf("\nAnimation complete. Press Enter to close...");
     getchar();
 
     free_memory(roads, roadNum, vehicles, vehiNum);
