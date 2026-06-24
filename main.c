@@ -3,390 +3,549 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <limits.h>
 
-struct Pixel{
+// Compile-time upper bound for the planned-path arrays stored on each vehicle.
+// Must be >= maxSteps passed to init_spacetime_grid().
+#define MAX_LOOKAHEAD 32
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Data Structures
+═══════════════════════════════════════════════════════════════════════════ */
+
+struct Pixel {
     int x, y;
     int r, g, b;
     int dx, dy;
 };
 
-struct Road{
-    int x1, y1, x2, y2; 
-    struct Pixel** pixels; 
+struct Road {
+    int x1, y1, x2, y2;
+    struct Pixel** pixels;
     int length, width;
 };
 
-struct Vehicle{
-    int x, y;
-    int r, g, b;
-    int dx, dy; 
-    struct Pixel** pixels; 
-    int length, width, num_pixels; 
-    int orig_dx, orig_dy;
+struct Vehicle {
+    int x, y;           // Anchor (top-left corner) of bounding box
+    int r, g, b;        // Colour
+    int dx, dy;         // Step velocity committed by the planner for this tick
+    struct Pixel** pixels;
+    int length, width, num_pixels;
+    int orig_dx, orig_dy; // Initial direction hint (kept for reference)
+
+    // ── WHCA* fields ──────────────────────────────────────────────
+    int priority;                   // Planning order: lower = earlier, higher priority
+    int goal_x, goal_y;             // Destination anchor the vehicle is driving toward
+    int planned_dx[MAX_LOOKAHEAD];  // Unit moves planned by A* for each lookahead step
+    int planned_dy[MAX_LOOKAHEAD];
 };
 
-// Global registries
-struct Vehicle* g_vehicles = NULL;
-int g_num_vehicles = 0;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Global State
+═══════════════════════════════════════════════════════════════════════════ */
 
-// Spacetime Grid Pointer: 3D array layout [X][Y][Time_Step]
-// 0 means free, any positive number (vehicle_index + 1) means reserved by that vehicle.
+struct Vehicle* g_vehicles     = NULL;
+int             g_num_vehicles = 0;
+
+// Spacetime reservation grid [x][y][t].
+// 0 = free; positive integer N means "reserved by vehicle index N-1".
 int*** g_spacetime_grid = NULL;
-int g_canvas_side = 0;
-int g_max_lookahead = 0;
+int   g_canvas_side     = 0;
+int   g_max_lookahead   = 0;
 
-void init_spacetime_grid(int canvaSide, int maxSteps) {
-    g_canvas_side = canvaSide;
-    g_max_lookahead = maxSteps;
-    
-    g_spacetime_grid = (int***)malloc(canvaSide * sizeof(int**));
-    for (int x = 0; x < canvaSide; x++) {
-        g_spacetime_grid[x] = (int**)malloc(canvaSide * sizeof(int*));
-        for (int y = 0; y < canvaSide; y++) {
-            g_spacetime_grid[x][y] = (int*)calloc(maxSteps + 1, sizeof(int));
-        }
+/* ═══════════════════════════════════════════════════════════════════════════
+   Spacetime Grid
+═══════════════════════════════════════════════════════════════════════════ */
+
+void init_spacetime_grid(int side, int steps) {
+    g_canvas_side   = side;
+    g_max_lookahead = steps;
+    g_spacetime_grid = malloc(side * sizeof(int**));
+    for (int x = 0; x < side; x++) {
+        g_spacetime_grid[x] = malloc(side * sizeof(int*));
+        for (int y = 0; y < side; y++)
+            g_spacetime_grid[x][y] = calloc(steps + 1, sizeof(int));
     }
 }
 
 void clear_spacetime_grid() {
-    for (int x = 0; x < g_canvas_side; x++) {
-        for (int y = 0; y < g_canvas_side; y++) {
+    for (int x = 0; x < g_canvas_side; x++)
+        for (int y = 0; y < g_canvas_side; y++)
             memset(g_spacetime_grid[x][y], 0, (g_max_lookahead + 1) * sizeof(int));
-        }
-    }
 }
 
 void free_spacetime_grid() {
     if (!g_spacetime_grid) return;
     for (int x = 0; x < g_canvas_side; x++) {
-        for (int y = 0; y < g_canvas_side; y++) {
-            free(g_spacetime_grid[x][y]);
-        }
+        for (int y = 0; y < g_canvas_side; y++) free(g_spacetime_grid[x][y]);
         free(g_spacetime_grid[x]);
     }
     free(g_spacetime_grid);
 }
 
-// Create a rectangular road based on two diagonally bound points.
-void make_road(struct Road* road, int x1, int y1, int x2, int y2){
+/* ═══════════════════════════════════════════════════════════════════════════
+   Road & Vehicle Construction
+═══════════════════════════════════════════════════════════════════════════ */
+
+void make_road(struct Road* road, int x1, int y1, int x2, int y2) {
     road->x1 = x1; road->y1 = y1;
     road->x2 = x2; road->y2 = y2;
     int length = abs(x2 - x1) + 1, width = abs(y2 - y1) + 1;
-    road->length = length;
-    road->width = width;
-    road->pixels = (struct Pixel**)malloc(length * width * sizeof(struct Pixel*));
-    for(int i = 0; i < length; i++){
-        for(int j = 0; j < width; j++){
-            road->pixels[i * width + j] = (struct Pixel*)malloc(sizeof(struct Pixel));
-            road->pixels[i * width + j]->x = x1 + i;
-            road->pixels[i * width + j]->y = y1 + j;
-            road->pixels[i * width + j]->r = 128;
-            road->pixels[i * width + j]->g = 128;
-            road->pixels[i * width + j]->b = 128;
-            road->pixels[i * width + j]->dx = 0;
-            road->pixels[i * width + j]->dy = 0;
+    road->length = length; road->width = width;
+    road->pixels = malloc(length * width * sizeof(struct Pixel*));
+    for (int i = 0; i < length; i++) {
+        for (int j = 0; j < width; j++) {
+            struct Pixel* p = malloc(sizeof(struct Pixel));
+            p->x = x1 + i; p->y = y1 + j;
+            p->r = 128; p->g = 128; p->b = 128;
+            p->dx = p->dy = 0;
+            road->pixels[i * width + j] = p;
         }
     }
 }
 
-void build_vehicle_pixels(struct Vehicle* vehicle) {
-    vehicle->num_pixels = vehicle->length * vehicle->width;
-    vehicle->pixels = (struct Pixel**)malloc(vehicle->num_pixels * sizeof(struct Pixel*));
-    for(int i = 0; i < vehicle->length; i++){
-        for(int j = 0; j < vehicle->width; j++){
-            int idx = i * vehicle->width + j;
-            vehicle->pixels[idx] = (struct Pixel*)malloc(sizeof(struct Pixel));
-            vehicle->pixels[idx]->x = vehicle->x + i;
-            vehicle->pixels[idx]->y = vehicle->y + j;
-            vehicle->pixels[idx]->r = vehicle->r;
-            vehicle->pixels[idx]->g = vehicle->g;
-            vehicle->pixels[idx]->b = vehicle->b;
-            vehicle->pixels[idx]->dx = vehicle->dx;
-            vehicle->pixels[idx]->dy = vehicle->dy;
+void build_vehicle_pixels(struct Vehicle* v) {
+    v->num_pixels = v->length * v->width;
+    v->pixels = malloc(v->num_pixels * sizeof(struct Pixel*));
+    for (int i = 0; i < v->length; i++) {
+        for (int j = 0; j < v->width; j++) {
+            int idx = i * v->width + j;
+            struct Pixel* p = malloc(sizeof(struct Pixel));
+            p->x = v->x + i; p->y = v->y + j;
+            p->r = v->r; p->g = v->g; p->b = v->b;
+            p->dx = v->dx; p->dy = v->dy;
+            v->pixels[idx] = p;
         }
     }
 }
 
-
-// Create a rectangular vehicle based on starting corner, colour, speed and size.
-void make_vehicle(struct Vehicle* vehicle, int x, int y, int r, int g, int b, int dx, int dy, int length, int width){
-    vehicle->x = x; vehicle->y = y;
-    vehicle->r = r; vehicle->g = g; vehicle->b = b;
-    vehicle->dx = dx; vehicle->dy = dy;
-    vehicle->orig_dx = dx; vehicle->orig_dy = dy;
-    vehicle->length = length; vehicle->width = width;
-    build_vehicle_pixels(vehicle);
-}
-
-// Self-protecting turn method. Returns 1 if successful, 0 if blocked.
-int turn_and_flip_vehicle(int vehicle_idx, int new_dx, int new_dy, int target_x, int target_y) {
-    struct Vehicle* v = &g_vehicles[vehicle_idx];
-    
-    // 1. Predict future dimensions to perform lookbefore validation
-    int current_horizontal = (v->orig_dx != 0);
-    int new_horizontal = (new_dx != 0);
-    int future_length = v->length;
-    int future_width = v->width;
-    
-    if (current_horizontal != new_horizontal) {
-        future_length = v->width;
-        future_width = v->length;
-    }
-
-    // 2a. Scan target bounding box against ALL spacetime steps (0..g_max_lookahead).
-    //     Checking only step 1 missed vehicles that are braked (dx=dy=0) because
-    //     their spacetime reservation only exists at step 0, not step 1.
-    for (int step = 0; step <= g_max_lookahead; step++) {
-        for (int i = 0; i < future_length; i++) {
-            for (int j = 0; j < future_width; j++) {
-                int check_x = target_x + i;
-                int check_y = target_y + j;
-
-                if (check_x >= 0 && check_x < g_canvas_side &&
-                    check_y >= 0 && check_y < g_canvas_side) {
-                    int occupant = g_spacetime_grid[check_x][check_y][step];
-                    if (occupant != 0 && occupant != (vehicle_idx + 1)) {
-                        // Safety breach via spacetime grid
-                        v->dx = 0;
-                        v->dy = 0;
-                        for (int p = 0; p < v->num_pixels; p++) {
-                            v->pixels[p]->dx = 0;
-                            v->pixels[p]->dy = 0;
-                        }
-                        return 0; // Abort turn execution
-                    }
-                }
-            }
-        }
-    }
-
-    // 2b. Direct pixel-level overlap check against every other vehicle's current
-    //     pixels. This catches static or freshly-braked vehicles that may have
-    //     zero velocity and therefore leave no spacetime trail past step 0.
-    for (int vi = 0; vi < g_num_vehicles; vi++) {
-        if (vi == vehicle_idx) continue;
-        struct Vehicle* other = &g_vehicles[vi];
-        for (int p = 0; p < other->num_pixels; p++) {
-            int ox = other->pixels[p]->x;
-            int oy = other->pixels[p]->y;
-            // Is this pixel inside the post-turn bounding box?
-            if (ox >= target_x && ox < target_x + future_length &&
-                oy >= target_y && oy < target_y + future_width) {
-                // Direct overlap with another vehicle's live pixel
-                v->dx = 0;
-                v->dy = 0;
-                for (int pp = 0; pp < v->num_pixels; pp++) {
-                    v->pixels[pp]->dx = 0;
-                    v->pixels[pp]->dy = 0;
-                }
-                return 0; // Abort turn execution
-            }
-        }
-    }
-
-    // 3. Safe to proceed: execute memory flip and layout shift
-    v->length = future_length;
-    v->width = future_width;
-
-    for (int i = 0; i < v->num_pixels; i++) {
-        free(v->pixels[i]);
-    }
-    free(v->pixels);
-
-    v->x = target_x;
-    v->y = target_y;
-    v->dx = new_dx;
-    v->dy = new_dy;
-    v->orig_dx = new_dx;
-    v->orig_dy = new_dy;
-
+// Construct a vehicle.  dx/dy are kept as a direction hint; the WHCA* planner
+// will override them with unit-step A* moves each tick.
+void make_vehicle(struct Vehicle* v,
+                  int x, int y, int r, int g, int b,
+                  int dx, int dy, int length, int width,
+                  int priority, int goal_x, int goal_y) {
+    v->x = x; v->y = y;
+    v->r = r; v->g = g; v->b = b;
+    v->dx = dx; v->dy = dy;
+    v->orig_dx = dx; v->orig_dy = dy;
+    v->length = length; v->width = width;
+    v->priority  = priority;
+    v->goal_x = goal_x; v->goal_y = goal_y;
+    memset(v->planned_dx, 0, sizeof(v->planned_dx));
+    memset(v->planned_dy, 0, sizeof(v->planned_dy));
     build_vehicle_pixels(v);
-    return 1; // Turn successful
 }
 
-void move_vehicle(struct Vehicle* vehicle){
-    for(int i = 0; i < vehicle->num_pixels; i++){
-        vehicle->pixels[i]->x += vehicle->dx;
-        vehicle->pixels[i]->y += vehicle->dy;
+void move_vehicle(struct Vehicle* v) {
+    v->x += v->dx; v->y += v->dy;
+    for (int i = 0; i < v->num_pixels; i++) {
+        v->pixels[i]->x += v->dx;
+        v->pixels[i]->y += v->dy;
     }
-    vehicle->x += vehicle->dx;
-    vehicle->y += vehicle->dy;
 }
 
-// Map planned trajectory into the Spacetime Grid
-// Returns the earliest conflict timestep found (0 if no conflict)
-int check_and_reserve_spacetime(int vehicle_idx) {
-    struct Vehicle* v = &g_vehicles[vehicle_idx];
-    int earliest_conflict = 0;
+/* ═══════════════════════════════════════════════════════════════════════════
+   WHCA* — Windowed Hierarchical Cooperative A*
+   ─────────────────────────────────────────────
+   Each vehicle runs spacetime A* within a sliding time window [0, g_max_lookahead].
+   Vehicles plan in ascending priority order; each planner sees the reservations
+   already placed by higher-priority vehicles and treats them as hard obstacles.
+   Only the first planned move (dx[0], dy[0]) is executed per tick; the window
+   then re-opens from the new position next frame.
+═══════════════════════════════════════════════════════════════════════════ */
 
-    // We check present and future states sequentially
-    for (int step = 0; step <= g_max_lookahead; step++) {
-        int conflict_at_step = 0;
+// ── Min-heap (open set for A*) ────────────────────────────────────────────
 
-        // Project where all pixels of this vehicle will be at this future time step
-        for (int i = 0; i < v->num_pixels; i++) {
-            int proj_x = v->pixels[i]->x + (v->orig_dx * step);
-            int proj_y = v->pixels[i]->y + (v->orig_dy * step);
+typedef struct { int x, y, t, g, f; } HNode;
+typedef struct { HNode* data; int size, cap; } MinHeap;
 
-            // Keep bounds checked within canvas
-            if (proj_x >= 0 && proj_x < g_canvas_side && proj_y >= 0 && proj_y < g_canvas_side) {
-                int occupant = g_spacetime_grid[proj_x][proj_y][step];
-                if (occupant != 0 && occupant != (vehicle_idx + 1)) {
-                    conflict_at_step = 1;
-                    if (earliest_conflict == 0) {
-                        earliest_conflict = step;
+static void mh_swap(MinHeap* h, int a, int b) {
+    HNode tmp = h->data[a]; h->data[a] = h->data[b]; h->data[b] = tmp;
+}
+
+static void mh_push(MinHeap* h, HNode n) {
+    if (h->size >= h->cap) return; // should never overflow given cap = nstates
+    h->data[h->size++] = n;
+    for (int i = h->size - 1; i > 0;) {
+        int p = (i - 1) / 2;
+        if (h->data[p].f > h->data[i].f) { mh_swap(h, p, i); i = p; }
+        else break;
+    }
+}
+
+static HNode mh_pop(MinHeap* h) {
+    HNode top = h->data[0];
+    h->data[0] = h->data[--h->size];
+    for (int i = 0;;) {
+        int l = 2*i+1, r = 2*i+2, s = i;
+        if (l < h->size && h->data[l].f < h->data[s].f) s = l;
+        if (r < h->size && h->data[r].f < h->data[s].f) s = r;
+        if (s == i) break;
+        mh_swap(h, i, s); i = s;
+    }
+    return top;
+}
+
+// ── Came-from table (path reconstruction) ────────────────────────────────
+
+// Records how we arrived at each (x, y, t) cell during A*.
+typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
+
+// Flat index into the (x, y, t) state space.
+#define SIDX(x, y, t) (((x) * g_canvas_side + (y)) * (g_max_lookahead + 1) + (t))
+
+// ── Collision predicate ───────────────────────────────────────────────────
+
+// Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
+// within bounds and free of foreign reservations at timestep t.
+static int pos_free(int vid, int ax, int ay, int t) {
+    struct Vehicle* v = &g_vehicles[vid];
+    for (int i = 0; i < v->length; i++) {
+        for (int j = 0; j < v->width; j++) {
+            int px = ax + i, py = ay + j;
+            if (px < 0 || px >= g_canvas_side ||
+                py < 0 || py >= g_canvas_side) return 0;
+            if (t >= 0 && t <= g_max_lookahead) {
+                int occ = g_spacetime_grid[px][py][t];
+                if (occ != 0 && occ != vid + 1) return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+// ── Spacetime A* for one vehicle ─────────────────────────────────────────
+
+// Plans vehicle vid's path to its goal within the current lookahead window.
+//   • Fills planned_dx[] / planned_dy[] with unit moves.
+//   • Reserves those cells in the shared spacetime grid.
+//   • Sets v->dx / v->dy to the first planned step (executed this tick).
+// Returns 1 if the goal is reachable within the window, 0 for a partial path.
+static int sign(int val) {
+    return (val > 0) - (val < 0);
+}
+
+// Plans vehicle vid's path to its goal within the current lookahead window.
+//   • Fills planned_dx[] / planned_dy[] with moves.
+//   • Reserves those cells (including intermediate swept cells) in the shared spacetime grid.
+//   • Sets v->dx / v->dy to the first planned step (executed this tick).
+// Returns 1 if the goal is reachable within the window, 0 for a partial path.
+static int whca_astar(int vid) {
+    struct Vehicle* v = &g_vehicles[vid];
+    const int sx = v->x, sy = v->y;
+    const int gx = v->goal_x, gy = v->goal_y;
+
+    int ns = g_canvas_side * g_canvas_side * (g_max_lookahead + 1);
+
+    CFEntry* cf   = calloc(ns, sizeof(CFEntry));
+    int*     gval = malloc(ns * sizeof(int));
+    for (int i = 0; i < ns; i++) gval[i] = INT_MAX;
+
+    MinHeap open = { malloc(ns * sizeof(HNode)), 0, ns };
+
+    // Seed the start state
+    int h0 = abs(sx - gx) + abs(sy - gy);
+    gval[SIDX(sx, sy, 0)] = 0;
+    cf[SIDX(sx, sy, 0)].pt = -1;          // sentinel: no parent
+    mh_push(&open, (HNode){sx, sy, 0, 0, h0});
+
+    int spd = abs(v->orig_dx) + abs(v->orig_dy);
+    if (spd == 0) spd = 1; // safeguard
+
+    int found = 0;
+    int bx = sx, by = sy, bt = 0; // best endpoint found (lowest h)
+    int bh = h0;
+
+    while (open.size > 0) {
+        HNode cur = mh_pop(&open);
+        int cx = cur.x, cy = cur.y, ct = cur.t;
+
+        if (cur.g > gval[SIDX(cx, cy, ct)]) continue; // stale duplicate
+
+        if (cx == gx && cy == gy) {
+            // Goal reached within window
+            found = 1; bx = cx; by = cy; bt = ct;
+            break;
+        }
+
+        // Track the node closest to goal as a fallback for partial paths
+        int ch = abs(cx - gx) + abs(cy - gy);
+        if (ch < bh) { bh = ch; bx = cx; by = cy; bt = ct; }
+
+        if (ct >= g_max_lookahead) continue; // window exhausted, can't expand
+
+        // 1. Wait action (move of 0 steps)
+        {
+            int nx = cx, ny = cy, nt = ct + 1;
+            if (pos_free(vid, nx, ny, nt)) {
+                int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
+                if (ng < gval[ni]) {
+                    gval[ni] = ng;
+                    cf[ni] = (CFEntry){ cx, cy, ct, 0, 0 };
+                    int nh = abs(nx - gx) + abs(ny - gy);
+                    mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
+                }
+            }
+        }
+
+        // 2. Cardinal moves: up to speed 'spd' in each direction
+        const int dx_dir[] = { 1, -1,  0,  0 };
+        const int dy_dir[] = { 0,  0,  1, -1 };
+        for (int d = 0; d < 4; d++) {
+            for (int k = 1; k <= spd; k++) {
+                int mx = dx_dir[d] * k;
+                int my = dy_dir[d] * k;
+                int nx = cx + mx, ny = cy + my, nt = ct + 1;
+
+                // Check all cells swept through (Option B)
+                int possible = 1;
+                for (int step = 1; step <= k; step++) {
+                    int ix = cx + dx_dir[d] * step;
+                    int iy = cy + dy_dir[d] * step;
+                    if (!pos_free(vid, ix, iy, nt)) {
+                        possible = 0;
+                        break;
                     }
                 }
-            }
-        }
+                if (!possible) continue;
 
-        // If no conflict at this step, lock the pixels down under our vehicle's ID
-        if (!conflict_at_step) {
-            for (int i = 0; i < v->num_pixels; i++) {
-                int proj_x = v->pixels[i]->x + (v->orig_dx * step);
-                int proj_y = v->pixels[i]->y + (v->orig_dy * step);
-                if (proj_x >= 0 && proj_x < g_canvas_side && proj_y >= 0 && proj_y < g_canvas_side) {
-                    g_spacetime_grid[proj_x][proj_y][step] = (vehicle_idx + 1);
+                int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
+                if (ng < gval[ni]) {
+                    gval[ni] = ng;
+                    cf[ni] = (CFEntry){ cx, cy, ct, mx, my };
+                    int nh = abs(nx - gx) + abs(ny - gy);
+                    mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
                 }
             }
         }
     }
-    return earliest_conflict;
-}
 
-// Main algorithm.
-void apply_spacetime_arbitration() {
-    clear_spacetime_grid();
+    // ── Reconstruct planned moves by walking the came-from chain ──────────
+    memset(v->planned_dx, 0, sizeof(v->planned_dx));
+    memset(v->planned_dy, 0, sizeof(v->planned_dy));
 
-    // Vehicles with lower indices have higher priority for reservations
-    for (int i = 0; i < g_num_vehicles; i++) {
-        int conflict_step = check_and_reserve_spacetime(i);
-        
-        if (conflict_step > 0) {
-            // Collision predicted! Yield dynamically
-            if (conflict_step == 1) {
-                // Imminent collision: Full Brake
-                g_vehicles[i].dx = 0;
-                g_vehicles[i].dy = 0;
-                printf("Spacetime Alert: Vehicle %d executing emergency stop.\n", i);
-            } else {
-                // Future collision: Smooth down velocity proportionally
-                g_vehicles[i].dx = g_vehicles[i].orig_dx / 2;
-                g_vehicles[i].dy = g_vehicles[i].orig_dy / 2;
-                printf("Spacetime Alert: Vehicle %d slowing down (Conflict at Step %d).\n", i, conflict_step);
+    for (int tx = bx, ty = by, tt = bt; tt > 0;) {
+        int idx = SIDX(tx, ty, tt);
+        v->planned_dx[tt - 1] = cf[idx].mdx;
+        v->planned_dy[tt - 1] = cf[idx].mdy;
+        int npx = cf[idx].px, npy = cf[idx].py, npt = cf[idx].pt;
+        tx = npx; ty = npy; tt = npt;
+    }
+
+    // ── Reserve the planned path in the shared spacetime grid ─────────────
+    int ax = sx, ay = sy;
+    // Reserve at s = 0 (starting position)
+    for (int i = 0; i < v->length; i++) {
+        for (int j = 0; j < v->width; j++) {
+            int px = ax + i, py = ay + j;
+            if (px >= 0 && px < g_canvas_side &&
+                py >= 0 && py < g_canvas_side)
+                g_spacetime_grid[px][py][0] = vid + 1;
+        }
+    }
+    // Reserve at s > 0 (subsequent timesteps)
+    for (int s = 1; s <= g_max_lookahead; s++) {
+        int prev_x = ax, prev_y = ay;
+        ax += v->planned_dx[s - 1];
+        ay += v->planned_dy[s - 1];
+
+        int dx = v->planned_dx[s - 1];
+        int dy = v->planned_dy[s - 1];
+        int steps = abs(dx) + abs(dy);
+        if (steps == 0) {
+            for (int i = 0; i < v->length; i++) {
+                for (int j = 0; j < v->width; j++) {
+                    int px = ax + i, py = ay + j;
+                    if (px >= 0 && px < g_canvas_side &&
+                        py >= 0 && py < g_canvas_side)
+                        g_spacetime_grid[px][py][s] = vid + 1;
+                }
             }
         } else {
-            // Path clear: Resume original cruise velocity
-            g_vehicles[i].dx = g_vehicles[i].orig_dx;
-            g_vehicles[i].dy = g_vehicles[i].orig_dy;
-        }
-
-        // Apply updated step velocities to internal pixels
-        for (int p = 0; p < g_vehicles[i].num_pixels; p++) {
-            g_vehicles[i].pixels[p]->dx = g_vehicles[i].dx;
-            g_vehicles[i].pixels[p]->dy = g_vehicles[i].dy;
+            int sdx = sign(dx);
+            int sdy = sign(dy);
+            for (int step = 0; step <= steps; step++) {
+                int ix = prev_x + sdx * step;
+                int iy = prev_y + sdy * step;
+                for (int i = 0; i < v->length; i++) {
+                    for (int j = 0; j < v->width; j++) {
+                        int px = ix + i, py = iy + j;
+                        if (px >= 0 && px < g_canvas_side &&
+                            py >= 0 && py < g_canvas_side)
+                            g_spacetime_grid[px][py][s] = vid + 1;
+                    }
+                }
+            }
         }
     }
+
+    // ── Commit first step as this tick's velocity ─────────────────────────
+    v->dx = v->planned_dx[0];
+    v->dy = v->planned_dy[0];
+    for (int p = 0; p < v->num_pixels; p++) {
+        v->pixels[p]->dx = v->dx;
+        v->pixels[p]->dy = v->dy;
+    }
+
+    free(cf); free(gval); free(open.data);
+    return found;
 }
 
-void resize_terminal(int rows, int cols){
-    struct winsize ws;
-    ws.ws_row = rows;
-    ws.ws_col = cols;
-    ws.ws_xpixel = 0;
-    ws.ws_ypixel = 0;
-    if(ioctl(STDOUT_FILENO, TIOCSWINSZ, &ws) == 0){
+// ── Priority comparator for qsort ────────────────────────────────────────
+
+static int cmp_priority(const void* a, const void* b) {
+    return g_vehicles[*(const int*)a].priority
+         - g_vehicles[*(const int*)b].priority;
+}
+
+// ── Top-level WHCA* planner ───────────────────────────────────────────────
+
+// Plans all vehicles cooperatively for this tick.
+// Vehicles are processed in ascending priority order; each one sees the
+// spacetime reservations already placed by higher-priority vehicles.
+void apply_whca_star() {
+    clear_spacetime_grid();
+
+    // Build priority-sorted planning order
+    int* order = malloc(g_num_vehicles * sizeof(int));
+    for (int i = 0; i < g_num_vehicles; i++) order[i] = i;
+    qsort(order, g_num_vehicles, sizeof(int), cmp_priority);
+
+    for (int k = 0; k < g_num_vehicles; k++) {
+        int vi = order[k];
+        struct Vehicle* v = &g_vehicles[vi];
+
+        if (v->x == v->goal_x && v->y == v->goal_y) {
+            // Vehicle has reached its goal: park it and hold the space for the
+            // full window so it remains a hard obstacle for lower-priority peers.
+            v->dx = v->dy = 0;
+            for (int p = 0; p < v->num_pixels; p++)
+                v->pixels[p]->dx = v->pixels[p]->dy = 0;
+            for (int s = 0; s <= g_max_lookahead; s++)
+                for (int i = 0; i < v->length; i++)
+                    for (int j = 0; j < v->width; j++) {
+                        int px = v->x + i, py = v->y + j;
+                        if (px >= 0 && px < g_canvas_side &&
+                            py >= 0 && py < g_canvas_side)
+                            g_spacetime_grid[px][py][s] = vi + 1;
+                    }
+            continue;
+        }
+
+        whca_astar(vi);
+    }
+
+    free(order);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Terminal & Rendering
+═══════════════════════════════════════════════════════════════════════════ */
+
+void resize_terminal(int rows, int cols) {
+    struct winsize ws = { rows, cols, 0, 0 };
+    if (ioctl(STDOUT_FILENO, TIOCSWINSZ, &ws) == 0) {
         printf("\033[8;%d;%dt", rows, cols);
         fflush(stdout);
     }
 }
 
-void draw_scene(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide){
-    char scene[canvaSide][canvaSide];
-    int r[canvaSide][canvaSide], g[canvaSide][canvaSide], b[canvaSide][canvaSide];
+void draw_scene(struct Road* roads, int num_roads,
+                struct Vehicle* vehicles, int num_vehicles, int side) {
+    char scene[side][side];
+    int  rc[side][side], gc[side][side], bc[side][side];
 
-    for(int y = 0; y < canvaSide; y++){
-        for(int x = 0; x < canvaSide; x++){
+    for (int y = 0; y < side; y++)
+        for (int x = 0; x < side; x++) {
             scene[y][x] = ' ';
-            r[y][x] = 255; g[y][x] = 255; b[y][x] = 255;
+            rc[y][x] = gc[y][x] = bc[y][x] = 255;
         }
-    }
 
-    for (int i = 0; i < num_roads; i++){
-        for(int j = 0; j < roads[i].length * roads[i].width; j++){
-            int x = roads[i].pixels[j]->x;
-            int y = roads[i].pixels[j]->y;
-            if(x >= 0 && x < canvaSide && y >= 0 && y < canvaSide){
+    for (int i = 0; i < num_roads; i++)
+        for (int j = 0; j < roads[i].length * roads[i].width; j++) {
+            int x = roads[i].pixels[j]->x, y = roads[i].pixels[j]->y;
+            if (x >= 0 && x < side && y >= 0 && y < side) {
                 scene[y][x] = '.';
-                r[y][x] = roads[i].pixels[j]->r;
-                g[y][x] = roads[i].pixels[j]->g;
-                b[y][x] = roads[i].pixels[j]->b;
+                rc[y][x] = gc[y][x] = bc[y][x] = 128;
             }
         }
-    }
 
-    for(int i = 0; i < num_vehicles; i++){
-        for(int j = 0; j < vehicles[i].length * vehicles[i].width; j++){
-            int x = vehicles[i].pixels[j]->x;
-            int y = vehicles[i].pixels[j]->y;
-            if(x >= 0 && x < canvaSide && y >= 0 && y < canvaSide){
+    for (int i = 0; i < num_vehicles; i++)
+        for (int j = 0; j < vehicles[i].num_pixels; j++) {
+            int x = vehicles[i].pixels[j]->x, y = vehicles[i].pixels[j]->y;
+            if (x >= 0 && x < side && y >= 0 && y < side) {
                 scene[y][x] = '*';
-                r[y][x] = vehicles[i].pixels[j]->r;
-                g[y][x] = vehicles[i].pixels[j]->g;
-                b[y][x] = vehicles[i].pixels[j]->b;
+                rc[y][x] = vehicles[i].pixels[j]->r;
+                gc[y][x] = vehicles[i].pixels[j]->g;
+                bc[y][x] = vehicles[i].pixels[j]->b;
             }
         }
-    }
 
-    for(int y = 0; y < canvaSide; y++){
-        for(int x = 0; x < canvaSide; x++){
-            if(scene[y][x] != ' '){
-                printf("\033[38;2;%d;%d;%dm%c\033[0m", r[y][x], g[y][x], b[y][x], scene[y][x]);
-            } else {
-                printf(" ");
-            }
+    for (int y = 0; y < side; y++) {
+        for (int x = 0; x < side; x++) {
+            if (scene[y][x] != ' ')
+                printf("\033[38;2;%d;%d;%dm%c\033[0m",
+                       rc[y][x], gc[y][x], bc[y][x], scene[y][x]);
+            else putchar(' ');
         }
-        printf("\n");
+        putchar('\n');
     }
 }
 
-void run_animation(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide, int stepCount){
-    for(int step = 0; step < stepCount; step++){
-        
-        // Sample turn for vehicles[1]
-        if (step == 6) {
-            printf("\n--- Routing Event: Vehicle 1 is turning right & flipping structural dimensions! ---\n");
-            turn_and_flip_vehicle(1, 2, 0, 10, 7);
-            usleep(1000000); 
-        }
-        
-        apply_spacetime_arbitration();
+void run_animation(struct Road* roads, int num_roads,
+                   struct Vehicle* vehicles, int num_vehicles,
+                   int side, int step_count) {
+    for (int step = 0; step < step_count; step++) {
+        // Plan (sets dx/dy on every vehicle), then move, then draw
+        apply_whca_star();
 
         printf("\033[2J\033[H");
+        for (int i = 0; i < num_vehicles; i++) move_vehicle(&vehicles[i]);
+        draw_scene(roads, num_roads, vehicles, num_vehicles, side);
+
+        // ── Per-vehicle HUD ───────────────────────────────────────
+        printf("\n Step %2d / %d\n", step + 1, step_count);
+        printf(" %-4s %-4s %-12s %-12s %-10s %s\n",
+               "V", "Pri", "Position", "Goal", "Move", "Status");
+        printf(" ────────────────────────────────────────────────────\n");
         for (int i = 0; i < num_vehicles; i++) {
-            move_vehicle(&vehicles[i]);
+            int at_goal = (vehicles[i].x == vehicles[i].goal_x &&
+                           vehicles[i].y == vehicles[i].goal_y);
+            printf(" V%d   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
+                   i, vehicles[i].priority,
+                   vehicles[i].x, vehicles[i].y,
+                   vehicles[i].goal_x, vehicles[i].goal_y,
+                   vehicles[i].dx, vehicles[i].dy,
+                   at_goal ? "\033[32m\xe2\x9c\x93 GOAL\033[0m" : "en route");
         }
-        draw_scene(roads, num_roads, vehicles, num_vehicles, canvaSide);
-        printf("Step %d\n", step + 1);
+
         usleep(300000);
     }
 }
 
-void free_memory(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles){
-    for(int i = 0; i < num_roads; i++){
-        for(int j = 0; j < roads[i].length * roads[i].width; j++){
+/* ═══════════════════════════════════════════════════════════════════════════
+   Memory Cleanup
+═══════════════════════════════════════════════════════════════════════════ */
+
+void free_memory(struct Road* roads, int num_roads,
+                 struct Vehicle* vehicles, int num_vehicles) {
+    for (int i = 0; i < num_roads; i++) {
+        for (int j = 0; j < roads[i].length * roads[i].width; j++)
             free(roads[i].pixels[j]);
-        }
         free(roads[i].pixels);
     }
-    for(int i = 0; i < num_vehicles; i++){
-        for(int j = 0; j < vehicles[i].num_pixels; j++){
+    for (int i = 0; i < num_vehicles; i++) {
+        for (int j = 0; j < vehicles[i].num_pixels; j++)
             free(vehicles[i].pixels[j]);
-        }
         free(vehicles[i].pixels);
     }
     free_spacetime_grid();
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Terminal Auto-launch
+═══════════════════════════════════════════════════════════════════════════ */
 
 void handle_terminal_relaunch(int argc, char *argv[]) {
     if (argc != 1) return;
@@ -399,48 +558,62 @@ void handle_terminal_relaunch(int argc, char *argv[]) {
             if (system(cmd) != -1) exit(0);
         }
     }
-    const char *candidates[] = {"x-terminal-emulator", "xterm", "gnome-terminal", "konsole", "alacritty", "kitty", "urvxt", "st", NULL};
+    const char *candidates[] = {
+        "x-terminal-emulator", "xterm", "gnome-terminal",
+        "konsole", "alacritty", "kitty", "urxvt", "st", NULL
+    };
     for (int i = 0; candidates[i]; i++) {
-        const char *term = candidates[i];
-        snprintf(cmd, sizeof(cmd), "command -v %s >/dev/null 2>&1", term);
+        snprintf(cmd, sizeof(cmd), "command -v %s >/dev/null 2>&1", candidates[i]);
         if (system(cmd) == 0) {
-            if (strcmp(term, "gnome-terminal") == 0) {
-                snprintf(cmd, sizeof(cmd), "%s -- %s --child &", term, argv[0]);
-            } else {
-                snprintf(cmd, sizeof(cmd), "%s -e %s --child &", term, argv[0]);
-            }
+            if (strcmp(candidates[i], "gnome-terminal") == 0)
+                snprintf(cmd, sizeof(cmd), "%s -- %s --child &", candidates[i], argv[0]);
+            else
+                snprintf(cmd, sizeof(cmd), "%s -e %s --child &", candidates[i], argv[0]);
             if (system(cmd) != -1) exit(0);
         }
     }
 }
 
-int main(int argc, char *argv[]){
+/* ═══════════════════════════════════════════════════════════════════════════
+   Entry Point
+═══════════════════════════════════════════════════════════════════════════ */
+
+int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
-    // Grid properties (Ready to upscale to 100+)
-    int roadNum = 3, 
-        vehiNum = 3, 
-        canvaSide = 40, 
-        stepCount = 20,
-        maxSteps = 4; // Lookahead time window horizon
+    int roadNum   = 3,
+        vehiNum   = 3,
+        canvaSide = 40,
+        stepCount = 50,
+        maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
     init_spacetime_grid(canvaSide, maxSteps);
 
-    struct Road roads[roadNum];
+    struct Road    roads[roadNum];
     struct Vehicle vehicles[vehiNum];
 
-    make_road(&roads[0], 0, 5, 39, 8);
-    make_road(&roads[1], 10, 0, 15, 39);
-    make_road(&roads[2], 10, 12, 39, 15);
+    // Road layout
+    make_road(&roads[0],  0,  5, 39,  8); // Horizontal (upper)
+    make_road(&roads[1], 10,  0, 15, 39); // Vertical
+    make_road(&roads[2], 10, 12, 39, 15); // Horizontal (lower)
 
-    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 3, 0, 3, 1);
-    make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
-    make_vehicle(&vehicles[2], 22, 5, 0, 0, 255, -3, 0, 5, 1);
+    // make_vehicle(v, x, y, r, g, b, dx, dy, len, wid, priority, goal_x, goal_y)
+    //
+    // V0 Red   (3×1) — moves right along upper road, crosses the vertical road
+    // V1 Green (2×4) — moves down the vertical road, crosses the upper road
+    // V2 Blue  (5×1) — moves left along upper road, head-on with V0
+    //
+    // Priority 1 (Red) plans first → always has right-of-way.
+    // Priority 2 (Green) routes around Red's reservations.
+    // Priority 3 (Blue) negotiates around both.
+    make_vehicle(&vehicles[0],  0,  8, 255,   0,   0,  2,  0,  3,  1,  1, 35,  8);
+    make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 34);
+    make_vehicle(&vehicles[2], 32,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
 
-    // Resize window to accommodate size for the map.
-    resize_terminal(canvaSide + 6, canvaSide + 2);
+    // Resize window: extra rows for HUD, extra cols for status text
+    resize_terminal(canvaSide + 10, canvaSide + 42);
 
-    g_vehicles = vehicles;
+    g_vehicles     = vehicles;
     g_num_vehicles = vehiNum;
 
     draw_scene(roads, roadNum, vehicles, vehiNum, canvaSide);
