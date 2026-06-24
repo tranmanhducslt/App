@@ -67,6 +67,7 @@ void free_spacetime_grid() {
     free(g_spacetime_grid);
 }
 
+// Create a rectangular road based on two diagonally bound points.
 void make_road(struct Road* road, int x1, int y1, int x2, int y2){
     road->x1 = x1; road->y1 = y1;
     road->x2 = x2; road->y2 = y2;
@@ -106,6 +107,8 @@ void build_vehicle_pixels(struct Vehicle* vehicle) {
     }
 }
 
+
+// Create a rectangular vehicle based on starting corner, colour, speed and size.
 void make_vehicle(struct Vehicle* vehicle, int x, int y, int r, int g, int b, int dx, int dy, int length, int width){
     vehicle->x = x; vehicle->y = y;
     vehicle->r = r; vehicle->g = g; vehicle->b = b;
@@ -115,15 +118,75 @@ void make_vehicle(struct Vehicle* vehicle, int x, int y, int r, int g, int b, in
     build_vehicle_pixels(vehicle);
 }
 
-void turn_and_flip_vehicle(struct Vehicle* v, int new_dx, int new_dy, int target_x, int target_y) {
+// Self-protecting turn method. Returns 1 if successful, 0 if blocked.
+int turn_and_flip_vehicle(int vehicle_idx, int new_dx, int new_dy, int target_x, int target_y) {
+    struct Vehicle* v = &g_vehicles[vehicle_idx];
+    
+    // 1. Predict future dimensions to perform lookbefore validation
     int current_horizontal = (v->orig_dx != 0);
     int new_horizontal = (new_dx != 0);
+    int future_length = v->length;
+    int future_width = v->width;
     
     if (current_horizontal != new_horizontal) {
-        int temp = v->length;
-        v->length = v->width;
-        v->width = temp;
+        future_length = v->width;
+        future_width = v->length;
     }
+
+    // 2a. Scan target bounding box against ALL spacetime steps (0..g_max_lookahead).
+    //     Checking only step 1 missed vehicles that are braked (dx=dy=0) because
+    //     their spacetime reservation only exists at step 0, not step 1.
+    for (int step = 0; step <= g_max_lookahead; step++) {
+        for (int i = 0; i < future_length; i++) {
+            for (int j = 0; j < future_width; j++) {
+                int check_x = target_x + i;
+                int check_y = target_y + j;
+
+                if (check_x >= 0 && check_x < g_canvas_side &&
+                    check_y >= 0 && check_y < g_canvas_side) {
+                    int occupant = g_spacetime_grid[check_x][check_y][step];
+                    if (occupant != 0 && occupant != (vehicle_idx + 1)) {
+                        // Safety breach via spacetime grid
+                        v->dx = 0;
+                        v->dy = 0;
+                        for (int p = 0; p < v->num_pixels; p++) {
+                            v->pixels[p]->dx = 0;
+                            v->pixels[p]->dy = 0;
+                        }
+                        return 0; // Abort turn execution
+                    }
+                }
+            }
+        }
+    }
+
+    // 2b. Direct pixel-level overlap check against every other vehicle's current
+    //     pixels. This catches static or freshly-braked vehicles that may have
+    //     zero velocity and therefore leave no spacetime trail past step 0.
+    for (int vi = 0; vi < g_num_vehicles; vi++) {
+        if (vi == vehicle_idx) continue;
+        struct Vehicle* other = &g_vehicles[vi];
+        for (int p = 0; p < other->num_pixels; p++) {
+            int ox = other->pixels[p]->x;
+            int oy = other->pixels[p]->y;
+            // Is this pixel inside the post-turn bounding box?
+            if (ox >= target_x && ox < target_x + future_length &&
+                oy >= target_y && oy < target_y + future_width) {
+                // Direct overlap with another vehicle's live pixel
+                v->dx = 0;
+                v->dy = 0;
+                for (int pp = 0; pp < v->num_pixels; pp++) {
+                    v->pixels[pp]->dx = 0;
+                    v->pixels[pp]->dy = 0;
+                }
+                return 0; // Abort turn execution
+            }
+        }
+    }
+
+    // 3. Safe to proceed: execute memory flip and layout shift
+    v->length = future_length;
+    v->width = future_width;
 
     for (int i = 0; i < v->num_pixels; i++) {
         free(v->pixels[i]);
@@ -138,6 +201,7 @@ void turn_and_flip_vehicle(struct Vehicle* v, int new_dx, int new_dy, int target
     v->orig_dy = new_dy;
 
     build_vehicle_pixels(v);
+    return 1; // Turn successful
 }
 
 void move_vehicle(struct Vehicle* vehicle){
@@ -155,8 +219,8 @@ int check_and_reserve_spacetime(int vehicle_idx) {
     struct Vehicle* v = &g_vehicles[vehicle_idx];
     int earliest_conflict = 0;
 
-    // We check future states sequentially
-    for (int step = 1; step <= g_max_lookahead; step++) {
+    // We check present and future states sequentially
+    for (int step = 0; step <= g_max_lookahead; step++) {
         int conflict_at_step = 0;
 
         // Project where all pixels of this vehicle will be at this future time step
@@ -190,6 +254,7 @@ int check_and_reserve_spacetime(int vehicle_idx) {
     return earliest_conflict;
 }
 
+// Main algorithm.
 void apply_spacetime_arbitration() {
     clear_spacetime_grid();
 
@@ -288,14 +353,13 @@ void draw_scene(struct Road* roads, int num_roads, struct Vehicle* vehicles, int
 void run_animation(struct Road* roads, int num_roads, struct Vehicle* vehicles, int num_vehicles, int canvaSide, int stepCount){
     for(int step = 0; step < stepCount; step++){
         
-        /*
+        // Sample turn for vehicles[1]
         if (step == 6) {
             printf("\n--- Routing Event: Vehicle 1 is turning right & flipping structural dimensions! ---\n");
-            turn_and_flip_vehicle(&vehicles[1], -2, 0, 14, 12);
+            turn_and_flip_vehicle(1, 2, 0, 10, 7);
             usleep(1000000); 
         }
-        */
-
+        
         apply_spacetime_arbitration();
 
         printf("\033[2J\033[H");
@@ -369,9 +433,9 @@ int main(int argc, char *argv[]){
     make_road(&roads[1], 10, 0, 15, 39);
     make_road(&roads[2], 10, 12, 39, 15);
 
-    make_vehicle(&vehicles[0], 0, 7, 255, 0, 0, 2, 0, 3, 1);
-    make_vehicle(&vehicles[1], 11, 0, 0, 255, 0, 0, 1, 2, 4);
-    make_vehicle(&vehicles[2], 30, 5, 0, 0, 255, -3, 0, 5, 1);
+    make_vehicle(&vehicles[0], 0, 8, 255, 0, 0, 3, 0, 3, 1);
+    make_vehicle(&vehicles[1], 10, 0, 0, 255, 0, 0, 1, 2, 4);
+    make_vehicle(&vehicles[2], 22, 5, 0, 0, 255, -3, 0, 5, 1);
 
     // Resize window to accommodate size for the map.
     resize_terminal(canvaSide + 6, canvaSide + 2);
