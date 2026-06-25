@@ -137,6 +137,34 @@ void make_vehicle(struct Vehicle* v,
     build_vehicle_pixels(v);
 }
 
+// Placeholder vehicle turner. Will change later.
+
+void turn_vehicle(struct Vehicle* v, int new_dx, int new_dy, int new_x, int new_y) {
+    // 1. Update anchor and velocity hints
+    v->x = new_x;
+    v->y = new_y;
+    v->dx = new_dx;
+    v->dy = new_dy;
+    v->orig_dx = new_dx;
+    v->orig_dy = new_dy;
+
+    // 2. Rotate dimensions (swap length and width if changing orientation)
+    int old_oriented_horizontally = (v->orig_dx != 0);
+    int new_oriented_horizontally = (new_dx != 0);
+    if (old_oriented_horizontally != new_oriented_horizontally) {
+        int temp = v->length;
+        v->length = v->width;
+        v->width = temp;
+    }
+
+    // 3. Free old pixels and rebuild them at the new position/orientation
+    for (int j = 0; j < v->num_pixels; j++) {
+        free(v->pixels[j]);
+    }
+    free(v->pixels);
+    build_vehicle_pixels(v);
+}
+
 void move_vehicle(struct Vehicle* v) {
     v->x += v->dx; v->y += v->dy;
     for (int i = 0; i < v->num_pixels; i++) {
@@ -497,6 +525,16 @@ void run_animation(struct Road* roads, int num_roads,
                    struct Vehicle* vehicles, int num_vehicles,
                    int side, int step_count) {
     for (int step = 0; step < step_count; step++) {
+        
+        /* sample turns
+        if (vehicles[1].x == 10 && vehicles[1].y == 7){
+            turn_vehicle(&vehicles[1], 2, 0, 7, 10);
+        }
+        if (vehicles[3].x == 15 && vehicles[3].y == 12){
+            turn_vehicle(&vehicles[3], 0, 3, 15, 12);
+        }
+        */
+        
         // Plan (sets dx/dy on every vehicle), then move, then draw
         apply_whca_star();
 
@@ -582,9 +620,9 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 3,
-        vehiNum   = 3,
-        canvaSide = 50,
-        stepCount = 50,
+        vehiNum   = 5,
+        canvaSide = 30,
+        stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
     init_spacetime_grid(canvaSide, maxSteps);
@@ -606,10 +644,11 @@ int main(int argc, char *argv[]) {
     // Priority 1 (Red) plans first → always has right-of-way.
     // Priority 2 (Green) routes around Red's reservations.
     // Priority 3 (Blue) negotiates around both.
-    make_vehicle(&vehicles[0],  0,  8, 255,   0,   0,  2,  0,  3,  1,  1, 45,  8);
-    make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 44);
-    make_vehicle(&vehicles[2], 30,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
-
+    make_vehicle(&vehicles[0],  0,  8, 255,   0,   0,  2,  0,  3,  1,  1, 25,  8);
+    make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 26,  7);
+    make_vehicle(&vehicles[2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
+    make_vehicle(&vehicles[3], 26, 12, 255,   0, 255, -2,  0,  4,  1,  2, 15,  0);
+    make_vehicle(&vehicles[4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0);
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + 10, canvaSide + 40);
 
