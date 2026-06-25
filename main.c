@@ -620,7 +620,7 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 3,
-        vehiNum   = 5,
+        vehiNum   = 7,
         canvaSide = 30,
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
@@ -636,21 +636,19 @@ int main(int argc, char *argv[]) {
     make_road(&roads[2], 10, 12, 49, 15); // Horizontal (lower)
 
     // make_vehicle(v, x, y, r, g, b, dx, dy, len, wid, priority, goal_x, goal_y)
-    //
-    // V0 Red   (3×1) — moves right along upper road, crosses the vertical road
-    // V1 Green (2×4) — moves down the vertical road, crosses the upper road
-    // V2 Blue  (5×1) — moves left along upper road, head-on with V0
-    //
     // Priority 1 (Red) plans first → always has right-of-way.
     // Priority 2 (Green) routes around Red's reservations.
     // Priority 3 (Blue) negotiates around both.
-    make_vehicle(&vehicles[0],  0,  8, 255,   0,   0,  2,  0,  3,  1,  1, 25,  8);
+    make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 25,  8);
     make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 26,  7);
     make_vehicle(&vehicles[2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
     make_vehicle(&vehicles[3], 26, 12, 255,   0, 255, -2,  0,  4,  1,  2, 15,  0);
     make_vehicle(&vehicles[4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0);
+    make_vehicle(&vehicles[5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12);
+    make_vehicle(&vehicles[6],  0,  8, 128, 128, 128,  3,  0,  3,  1,  2, 21,  8);
+    //make_vehicle(&vehicles[6], 15, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12);
     // Resize window: extra rows for HUD, extra cols for status text
-    resize_terminal(canvaSide + 10, canvaSide + 40);
+    resize_terminal(canvaSide + 15, canvaSide + 40);
 
     g_vehicles     = vehicles;
     g_num_vehicles = vehiNum;
