@@ -525,13 +525,15 @@ void run_animation(struct Road* roads, int num_roads,
                    struct Vehicle* vehicles, int num_vehicles,
                    int side, int step_count) {
     for (int step = 0; step < step_count; step++) {
-        
-        /* sample turns
-        if (vehicles[1].x == 10 && vehicles[1].y == 7){
-            turn_vehicle(&vehicles[1], 2, 0, 7, 10);
+        /*
+        if (vehicles[0].x == 10){
+            turn_vehicle(&vehicles[0], 1, 3, 10, 8);
         }
-        if (vehicles[3].x == 15 && vehicles[3].y == 12){
-            turn_vehicle(&vehicles[3], 0, 3, 15, 12);
+        if (vehicles[1].x == 10){
+            turn_vehicle(&vehicles[1], 4, 2, 10, 8);
+        }
+        if (vehicles[6].x == 10){
+            turn_vehicle(&vehicles[6], 1, 3, 10, 8);
         }
         */
         
@@ -635,18 +637,14 @@ int main(int argc, char *argv[]) {
     make_road(&roads[1], 10,  0, 15, 49); // Vertical
     make_road(&roads[2], 10, 12, 49, 15); // Horizontal (lower)
 
-    // make_vehicle(v, x, y, r, g, b, dx, dy, len, wid, priority, goal_x, goal_y)
-    // Priority 1 (Red) plans first → always has right-of-way.
-    // Priority 2 (Green) routes around Red's reservations.
-    // Priority 3 (Blue) negotiates around both.
-    make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 25,  8);
+    // 15 vehicles? how many until lock?
+    make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 10, 25);
     make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 26,  7);
     make_vehicle(&vehicles[2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
     make_vehicle(&vehicles[3], 26, 12, 255,   0, 255, -2,  0,  4,  1,  2, 15,  0);
     make_vehicle(&vehicles[4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0);
     make_vehicle(&vehicles[5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12);
-    make_vehicle(&vehicles[6],  0,  8, 128, 128, 128,  3,  0,  3,  1,  2, 21,  8);
-    //make_vehicle(&vehicles[6], 15, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12);
+    make_vehicle(&vehicles[6],  0,  8, 128, 128, 128,  3,  0,  3,  1,  2, 10, 20);
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + 15, canvaSide + 40);
 
