@@ -621,9 +621,9 @@ void handle_terminal_relaunch(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
-    int roadNum   = 3,
+    int roadNum   = 6,
         vehiNum   = 7,
-        canvaSide = 30,
+        canvaSide = 40,
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
@@ -633,9 +633,12 @@ int main(int argc, char *argv[]) {
     struct Vehicle vehicles[vehiNum];
 
     // Road layout
-    make_road(&roads[0],  0,  5, 49,  8); // Horizontal (upper)
-    make_road(&roads[1], 10,  0, 15, 49); // Vertical
-    make_road(&roads[2], 10, 12, 49, 15); // Horizontal (lower)
+    make_road(&roads[0],  0,  5, 39,  8); 
+    make_road(&roads[1], 10,  0, 15, 39); 
+    make_road(&roads[2], 10, 12, 39, 15); 
+    make_road(&roads[3], 30,  5, 33, 39);
+    make_road(&roads[4],  0, 27, 29, 30);
+    make_road(&roads[5],  0, 20, 29, 21);
 
     // 15 vehicles? how many until lock?
     make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 10, 25);
