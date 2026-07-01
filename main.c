@@ -622,8 +622,8 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 6,
-        vehiNum   = 7,
-        canvaSide = 40,
+        vehiNum   = 8,
+        canvaSide = 30,
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
@@ -633,21 +633,22 @@ int main(int argc, char *argv[]) {
     struct Vehicle vehicles[vehiNum];
 
     // Road layout
-    make_road(&roads[0],  0,  5, 39,  8); 
-    make_road(&roads[1], 10,  0, 15, 39); 
-    make_road(&roads[2], 10, 12, 39, 15); 
-    make_road(&roads[3], 30,  5, 33, 39);
-    make_road(&roads[4],  0, 27, 29, 30);
-    make_road(&roads[5],  0, 20, 29, 21);
+    make_road(&roads[0],  0,  5, 29,  8); 
+    make_road(&roads[1], 10,  0, 15, 29); 
+    make_road(&roads[2], 10, 12, 29, 15); 
+    make_road(&roads[3], 20,  5, 23, 29);
+    make_road(&roads[4],  0, 27, 29, 28);
+    make_road(&roads[5],  0, 20, 23, 21);
 
     // 15 vehicles? how many until lock?
-    make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 10, 25);
-    make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 26,  7);
-    make_vehicle(&vehicles[2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5);
-    make_vehicle(&vehicles[3], 26, 12, 255,   0, 255, -2,  0,  4,  1,  2, 15,  0);
-    make_vehicle(&vehicles[4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0);
-    make_vehicle(&vehicles[5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12);
-    make_vehicle(&vehicles[6],  0,  8, 128, 128, 128,  3,  0,  3,  1,  2, 10, 20);
+    make_vehicle(&vehicles[0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 24,  8); // red
+    make_vehicle(&vehicles[1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 25); // green
+    make_vehicle(&vehicles[2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  2,  5); // blue
+    make_vehicle(&vehicles[3], 23, 26, 255,   0, 255,  0, -2,  1,  4,  2, 23,  8); // magenta
+    make_vehicle(&vehicles[4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0); // cyan
+    make_vehicle(&vehicles[5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12); // yellow
+    make_vehicle(&vehicles[6],  0,  8, 128, 128, 128,  3,  0,  3,  1,  2, 20,  8); // grey
+    make_vehicle(&vehicles[7], 15, 25, 192, 192, 192,  0, -4,  1,  3,  3, 15,  1); // silver
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + 15, canvaSide + 40);
 
