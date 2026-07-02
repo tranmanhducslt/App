@@ -47,6 +47,10 @@ struct Vehicle {
 struct Vehicle* g_vehicles     = NULL;
 int             g_num_vehicles = 0;
 
+// Road constraints
+struct Road*    g_roads         = NULL;
+int             g_num_roads     = 0;
+
 // Spacetime reservation grid [x][y][t].
 // 0 = free; positive integer N means "reserved by vehicle index N-1".
 int*** g_spacetime_grid = NULL;
@@ -173,6 +177,20 @@ void move_vehicle(struct Vehicle* v) {
     }
 }
 
+int is_vehicle_on_road(struct Vehicle v, struct Road road){
+    return (v.x >= road.x1 && v.x + v.length - 1 <= road.x2 &&
+            v.y >= road.y1 && v.y + v.width - 1 <= road.y2);
+}
+
+int is_vehicle_on_any_road(struct Vehicle v, struct Road* roads, int num_roads){
+    for (int i = 0; i < num_roads; i++){
+        if (is_vehicle_on_road(v, roads[i])){
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    WHCA* — Windowed Hierarchical Cooperative A*
    ─────────────────────────────────────────────
@@ -226,9 +244,11 @@ typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
 // ── Collision predicate ───────────────────────────────────────────────────
 
 // Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
-// within bounds and free of foreign reservations at timestep t.
+// within bounds, free of foreign reservations at timestep t, and entirely on roads.
 static int pos_free(int vid, int ax, int ay, int t) {
     struct Vehicle* v = &g_vehicles[vid];
+    
+    // Check bounds and reservations for each cell of the vehicle
     for (int i = 0; i < v->length; i++) {
         for (int j = 0; j < v->width; j++) {
             int px = ax + i, py = ay + j;
@@ -240,6 +260,15 @@ static int pos_free(int vid, int ax, int ay, int t) {
             }
         }
     }
+    
+    // Check that the vehicle is entirely on roads
+    struct Vehicle temp_v = *v;
+    temp_v.x = ax;
+    temp_v.y = ay;
+    if (!is_vehicle_on_any_road(temp_v, g_roads, g_num_roads)) {
+        return 0;
+    }
+    
     return 1;
 }
 
@@ -432,7 +461,10 @@ static int cmp_priority(const void* a, const void* b) {
 // Plans all vehicles cooperatively for this tick.
 // Vehicles are processed in ascending priority order; each one sees the
 // spacetime reservations already placed by higher-priority vehicles.
-void apply_whca_star() {
+void apply_whca_star(struct Road* roads, int num_roads) {
+    g_roads = roads;
+    g_num_roads = num_roads;
+    
     clear_spacetime_grid();
 
     // Build priority-sorted planning order
@@ -538,7 +570,7 @@ void run_animation(struct Road* roads, int num_roads,
         */
         
         // Plan (sets dx/dy on every vehicle), then move, then draw
-        apply_whca_star();
+        apply_whca_star(roads, num_roads);
 
         printf("\033[2J\033[H");
         for (int i = 0; i < num_vehicles; i++) move_vehicle(&vehicles[i]);
