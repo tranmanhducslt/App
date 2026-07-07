@@ -573,18 +573,6 @@ void run_animation(struct Road* roads, int num_roads,
                    struct Vehicle* vehicles, int num_vehicles,
                    int side, int step_count) {
     for (int step = 0; step < step_count; step++) {
-        /*
-        if (vehicles[0].x == 10){
-            turn_vehicle(&vehicles[0], 1, 3, 10, 8);
-        }
-        if (vehicles[1].x == 10){
-            turn_vehicle(&vehicles[1], 4, 2, 10, 8);
-        }
-        if (vehicles[6].x == 10){
-            turn_vehicle(&vehicles[6], 1, 3, 10, 8);
-        }
-        */
-        
         // Plan (sets dx/dy on every vehicle), then move, then draw
         apply_whca_star(roads, num_roads);
 
@@ -594,14 +582,15 @@ void run_animation(struct Road* roads, int num_roads,
 
         // ── Per-vehicle HUD ───────────────────────────────────────
         printf("\n Step %2d / %d\n", step + 1, step_count);
-        printf(" %-4s %-4s %-12s %-12s %-10s %s\n",
+        printf(" %-4s %-5s %-17s %-13s %-10s %s\n",
                "V", "Pri", "Position", "Goal", "Move", "Status");
-        printf(" ────────────────────────────────────────────────────\n");
+        printf(" ────────────────────────────────────────────────────────────\n");
         for (int i = 0; i < num_vehicles; i++) {
             int at_goal = (vehicles[i].x == vehicles[i].goal_x &&
                            vehicles[i].y == vehicles[i].goal_y);
-            printf(" V%d   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
-                   i, vehicles[i].priority,
+            printf(" \033[38;2;%d;%d;%dmV%3d\033[0m   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
+                   vehicles[i].r, vehicles[i].g, vehicles[i].b, i,
+                   vehicles[i].priority,
                    vehicles[i].x, vehicles[i].y,
                    vehicles[i].goal_x, vehicles[i].goal_y,
                    vehicles[i].dx, vehicles[i].dy,
@@ -640,8 +629,8 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
     srand(time(NULL));
 
     int colors[][3] = {
-        {255, 0, 0},     // Red
-        {0, 255, 0},     // Lime
+        {255, 0, 0},    // Red
+        {0, 255, 0},    // Lime
         {0, 0, 255},    // Blue
         {255, 0, 255},  // Magenta
         {0, 255, 255},  // Cyan
