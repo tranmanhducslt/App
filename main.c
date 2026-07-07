@@ -907,12 +907,13 @@ int main(int argc, char *argv[]) {
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
-    int use_random = 0;
-    int custom_vehi_num = 30;
+    int use_random = 0,
+        custom_vehi_num = 30; // placeholder threshold
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "random") == 0) {
             use_random = 1;
+            // if a number succeedes --random, use that as the vehicle count
             if (i + 1 < argc) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
                     custom_vehi_num = atoi(argv[i+1]);
