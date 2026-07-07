@@ -582,13 +582,13 @@ void run_animation(struct Road* roads, int num_roads,
 
         // ── Per-vehicle HUD ───────────────────────────────────────
         printf("\n Step %2d / %d\n", step + 1, step_count);
-        printf(" %-4s %-5s %-17s %-13s %-10s %s\n",
+        printf(" %-3s %-5s %-17s %-13s %-10s %s\n",
                "V", "Pri", "Position", "Goal", "Move", "Status");
-        printf(" ────────────────────────────────────────────────────────────\n");
+        printf(" ───────────────────────────────────────────────────────────\n");
         for (int i = 0; i < num_vehicles; i++) {
             int at_goal = (vehicles[i].x == vehicles[i].goal_x &&
                            vehicles[i].y == vehicles[i].goal_y);
-            printf(" \033[38;2;%d;%d;%dmV%3d\033[0m   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
+            printf(" \033[38;2;%d;%d;%dmV%2d\033[0m   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
                    vehicles[i].r, vehicles[i].g, vehicles[i].b, i,
                    vehicles[i].priority,
                    vehicles[i].x, vehicles[i].y,
