@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <limits.h>
+#include <time.h>
 
 // Compile-time upper bound for the planned-path arrays stored on each vehicle.
 // Must be >= maxSteps passed to init_spacetime_grid().
@@ -631,17 +632,249 @@ void free_memory(struct Road* roads, int num_roads,
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Random Vehicle Generation
+═══════════════════════════════════════════════════════════════════════════ */
+
+void generate_random_vehicles(struct Road* roads, int num_roads,
+                              struct Vehicle* vehicles, int num_vehicles) {
+    srand(time(NULL));
+
+    int colors[][3] = {
+        {255, 0, 0},     // Red
+        {0, 255, 0},     // Lime
+        {0, 0, 255},    // Blue
+        {255, 0, 255},  // Magenta
+        {0, 255, 255},  // Cyan
+        {255, 255, 0},  // Yellow
+        {255, 128, 0},  // Orange
+        {0, 128, 0},    // Green
+        {128, 0, 128},  // Purple
+        {255, 0, 127},  // Rose
+        {128, 128, 128},// Grey
+        {192, 192, 192},// Silver
+        {255, 102, 102},// Coral
+        {255, 178, 102},// Light Orange
+        {178, 255, 102},// Lime Green
+        {102, 255, 178},// Mint
+        {102, 255, 255},// Ice Blue
+        {102, 178, 255},// Sky Blue
+        {178, 102, 255},// Lavender
+        {255, 102, 255},// Pink
+        {255, 102, 178} // Deep Pink
+    };
+    int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+    for (int v_idx = 0; v_idx < num_vehicles; v_idx++) {
+        int placed = 0;
+        for (int retry = 0; retry < 2000; retry++) {
+            int r_idx = rand() % num_roads;
+            struct Road road = roads[r_idx];
+
+            int is_horizontal = (road.x2 - road.x1) > (road.y2 - road.y1);
+            int road_width = is_horizontal ? (road.y2 - road.y1 + 1) : (road.x2 - road.x1 + 1);
+            int road_length = is_horizontal ? (road.x2 - road.x1 + 1) : (road.y2 - road.y1 + 1);
+
+            int max_v_width = road_width / 2;
+            if (max_v_width < 1) max_v_width = 1;
+            int v_width = rand() % max_v_width + 1;
+
+            int v_length = rand() % 3 + 2; // 2 to 4
+            if (v_length >= road_length) {
+                v_length = road_length - 1;
+                if (v_length < 1) v_length = 1;
+            }
+
+            int dx = 0, dy = 0;
+            int x_start = 0, y_start = 0;
+            int x_goal = 0, y_goal = 0;
+            int speed = rand() % 3 + 1;
+
+            if (is_horizontal) {
+                int east = rand() % 2;
+                if (east) {
+                    dx = speed;
+                    dy = 0;
+                    y_start = road.y2 - v_width + 1;
+                    y_goal = y_start;
+
+                    int x_range = road.x2 - road.x1 + 1 - v_length + 1;
+                    if (x_range > 1) {
+                        int x_a = road.x1 + (rand() % x_range);
+                        int x_b = road.x1 + (rand() % x_range);
+                        if (x_a == x_b) {
+                            if (x_a > road.x1) x_a--;
+                            else x_b++;
+                        }
+                        if (x_a < x_b) {
+                            x_start = x_a;
+                            x_goal = x_b;
+                        } else {
+                            x_start = x_b;
+                            x_goal = x_a;
+                        }
+                    } else {
+                        x_start = road.x1;
+                        x_goal = road.x1;
+                    }
+                } else {
+                    dx = -speed;
+                    dy = 0;
+                    y_start = road.y1;
+                    y_goal = y_start;
+
+                    int x_range = road.x2 - road.x1 + 1 - v_length + 1;
+                    if (x_range > 1) {
+                        int x_a = road.x1 + (rand() % x_range);
+                        int x_b = road.x1 + (rand() % x_range);
+                        if (x_a == x_b) {
+                            if (x_a > road.x1) x_a--;
+                            else x_b++;
+                        }
+                        if (x_a > x_b) {
+                            x_start = x_a;
+                            x_goal = x_b;
+                        } else {
+                            x_start = x_b;
+                            x_goal = x_a;
+                        }
+                    } else {
+                        x_start = road.x1;
+                        x_goal = road.x1;
+                    }
+                }
+            } else {
+                int south = rand() % 2;
+                if (south) {
+                    dx = 0;
+                    dy = speed;
+                    x_start = road.x1;
+                    x_goal = x_start;
+
+                    int y_range = road.y2 - road.y1 + 1 - v_length + 1;
+                    if (y_range > 1) {
+                        int y_a = road.y1 + (rand() % y_range);
+                        int y_b = road.y1 + (rand() % y_range);
+                        if (y_a == y_b) {
+                            if (y_a > road.y1) y_a--;
+                            else y_b++;
+                        }
+                        if (y_a < y_b) {
+                            y_start = y_a;
+                            y_goal = y_b;
+                        } else {
+                            y_start = y_b;
+                            y_goal = y_a;
+                        }
+                    } else {
+                        y_start = road.y1;
+                        y_goal = road.y1;
+                    }
+                } else {
+                    dx = 0;
+                    dy = -speed;
+                    x_start = road.x2 - v_width + 1;
+                    x_goal = x_start;
+
+                    int y_range = road.y2 - road.y1 + 1 - v_length + 1;
+                    if (y_range > 1) {
+                        int y_a = road.y1 + (rand() % y_range);
+                        int y_b = road.y1 + (rand() % y_range);
+                        if (y_a == y_b) {
+                            if (y_a > road.y1) y_a--;
+                            else y_b++;
+                        }
+                        if (y_a > y_b) {
+                            y_start = y_a;
+                            y_goal = y_b;
+                        } else {
+                            y_start = y_b;
+                            y_goal = y_a;
+                        }
+                    } else {
+                        y_start = road.y1;
+                        y_goal = road.y1;
+                    }
+                }
+            }
+
+            struct Vehicle temp_v;
+            temp_v.x = x_start;
+            temp_v.y = y_start;
+            if (is_horizontal) {
+                temp_v.length = v_length;
+                temp_v.width = v_width;
+            } else {
+                temp_v.length = v_width;
+                temp_v.width = v_length;
+            }
+
+            if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1)) {
+                if (is_vehicle_on_any_road(temp_v, roads, num_roads)) {
+                    int* col = colors[v_idx % num_colors];
+                    int priority = v_idx + 1;
+
+                    make_vehicle(&vehicles[v_idx], x_start, y_start, col[0], col[1], col[2],
+                                 dx, dy, temp_v.length, temp_v.width, priority, x_goal, y_goal);
+                    placed = 1;
+                    break;
+                }
+            }
+        }
+
+        if (!placed) {
+            for (int r_idx = 0; r_idx < num_roads; r_idx++) {
+                struct Road road = roads[r_idx];
+                int is_horizontal = (road.x2 - road.x1) > (road.y2 - road.y1);
+                int y_pos = is_horizontal ? (road.y2) : (road.y1);
+                int x_pos = is_horizontal ? (road.x1) : (road.x2);
+
+                struct Vehicle temp_v;
+                temp_v.x = x_pos;
+                temp_v.y = y_pos;
+                temp_v.length = 1;
+                temp_v.width = 1;
+
+                if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1) &&
+                    is_vehicle_on_any_road(temp_v, roads, num_roads)) {
+                    int* col = colors[v_idx % num_colors];
+                    int priority = v_idx + 1;
+                    make_vehicle(&vehicles[v_idx], x_pos, y_pos, col[0], col[1], col[2],
+                                 0, 0, 1, 1, priority, x_pos, y_pos);
+                    placed = 1;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Terminal Auto-launch
 ═══════════════════════════════════════════════════════════════════════════ */
 
 void handle_terminal_relaunch(int argc, char *argv[]) {
-    if (argc != 1) return;
+    int is_child = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--child") == 0) {
+            is_child = 1;
+            break;
+        }
+    }
+    if (is_child) return;
+
+    char args_str[512] = "";
+    for (int i = 1; i < argc; i++) {
+        strncat(args_str, " ", sizeof(args_str) - strlen(args_str) - 1);
+        strncat(args_str, argv[i], sizeof(args_str) - strlen(args_str) - 1);
+    }
+    strncat(args_str, " --child", sizeof(args_str) - strlen(args_str) - 1);
+
     const char *env_term = getenv("TERMINAL");
     char cmd[1024];
     if (env_term && *env_term) {
         snprintf(cmd, sizeof(cmd), "command -v %s >/dev/null 2>&1", env_term);
         if (system(cmd) == 0) {
-            snprintf(cmd, sizeof(cmd), "%s -e %s --child &", env_term, argv[0]);
+            snprintf(cmd, sizeof(cmd), "%s -e %s%s &", env_term, argv[0], args_str);
             if (system(cmd) != -1) exit(0);
         }
     }
@@ -653,9 +886,9 @@ void handle_terminal_relaunch(int argc, char *argv[]) {
         snprintf(cmd, sizeof(cmd), "command -v %s >/dev/null 2>&1", candidates[i]);
         if (system(cmd) == 0) {
             if (strcmp(candidates[i], "gnome-terminal") == 0)
-                snprintf(cmd, sizeof(cmd), "%s -- %s --child &", candidates[i], argv[0]);
+                snprintf(cmd, sizeof(cmd), "%s -- %s%s &", candidates[i], argv[0], args_str);
             else
-                snprintf(cmd, sizeof(cmd), "%s -e %s --child &", candidates[i], argv[0]);
+                snprintf(cmd, sizeof(cmd), "%s -e %s%s &", candidates[i], argv[0], args_str);
             if (system(cmd) != -1) exit(0);
         }
     }
@@ -674,6 +907,29 @@ int main(int argc, char *argv[]) {
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
 
+    int use_random = 0;
+    int custom_vehi_num = 30;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "random") == 0) {
+            use_random = 1;
+            if (i + 1 < argc) {
+                if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
+                    custom_vehi_num = atoi(argv[i+1]);
+                    if (custom_vehi_num <= 0) {
+                        custom_vehi_num = vehiNum;
+                    } else if (custom_vehi_num > 50) {
+                        custom_vehi_num = 50;
+                    }
+                }
+            }
+        }
+    }
+
+    if (use_random) {
+        vehiNum = custom_vehi_num;
+    }
+
     init_spacetime_grid(canvaSide, maxSteps);
 
     struct Road    roads[roadNum];
@@ -687,20 +943,24 @@ int main(int argc, char *argv[]) {
     make_road(&roads[4],  0, 27, 29, 28);
     make_road(&roads[5],  0, 20, 23, 21);
 
-    // 15 vehicles? how many until lock?
-    make_vehicle(&vehicles[ 0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 20,  8); // red
-    make_vehicle(&vehicles[ 1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 25); // lime
-    make_vehicle(&vehicles[ 2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  4,  5); // blue
-    make_vehicle(&vehicles[ 3], 23, 26, 255,   0, 255,  0, -2,  1,  4,  2, 23,  8); // magenta
-    make_vehicle(&vehicles[ 4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0); // cyan
-    make_vehicle(&vehicles[ 5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12); // yellow
-    make_vehicle(&vehicles[ 6],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
-    make_vehicle(&vehicles[ 7], 20,  5,   0, 128,   0, -1,  0,  2,  2,  2,  1,  5); // green
-    make_vehicle(&vehicles[ 8], 15, 20, 128,   0, 128,  0, -2,  1,  2,  2, 13,  2); // purple
-    make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
-    make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
-    make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
-    make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4, 14,  1); // test
+    if (use_random) {
+        generate_random_vehicles(roads, roadNum, vehicles, vehiNum);
+    } else {
+        // 15 vehicles? how many until lock?
+        make_vehicle(&vehicles[ 0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 20,  8); // red
+        make_vehicle(&vehicles[ 1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 25); // lime
+        make_vehicle(&vehicles[ 2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  4,  5); // blue
+        make_vehicle(&vehicles[ 3], 23, 26, 255,   0, 255,  0, -2,  1,  4,  2, 23,  8); // magenta
+        make_vehicle(&vehicles[ 4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0); // cyan
+        make_vehicle(&vehicles[ 5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12); // yellow
+        make_vehicle(&vehicles[ 6],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
+        make_vehicle(&vehicles[ 7], 20,  5,   0, 128,   0, -1,  0,  2,  2,  2,  1,  5); // green
+        make_vehicle(&vehicles[ 8], 15, 20, 128,   0, 128,  0, -2,  1,  2,  2, 13,  2); // purple
+        make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
+        make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
+        make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
+        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4, 14,  1); // test
+    }
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 8, canvaSide + 40);
 
