@@ -944,12 +944,12 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[ 4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0); // cyan
         make_vehicle(&vehicles[ 5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12); // yellow
         make_vehicle(&vehicles[ 6],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
-        make_vehicle(&vehicles[ 7], 20,  5,   0, 128,   0, -1,  0,  2,  2,  2,  1,  5); // green
-        make_vehicle(&vehicles[ 8], 15, 20, 128,   0, 128,  0, -2,  1,  2,  2, 13,  2); // purple
+        make_vehicle(&vehicles[ 7], 20,  5,   0, 128,   0, -1,  0,  2,  2,  3,  1,  5); // green
+        make_vehicle(&vehicles[ 8], 15, 20, 128,   0, 128,  0, -2,  1,  2,  1, 13,  2); // purple
         make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
         make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
         make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
-        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4,  0,  5); // black
+        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 8, canvaSide + 40);
