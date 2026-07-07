@@ -934,9 +934,9 @@ int main(int argc, char *argv[]) {
     make_road(&roads[5],  0, 20, 23, 21);
 
     if (use_random) {
+        // how many until lock?
         generate_random_vehicles(roads, roadNum, vehicles, vehiNum);
     } else {
-        // 15 vehicles? how many until lock?
         make_vehicle(&vehicles[ 0],  4,  8, 255,   0,   0,  2,  0,  3,  1,  1, 20,  8); // red
         make_vehicle(&vehicles[ 1], 10,  0,   0, 255,   0,  0,  1,  2,  4,  2, 10, 25); // lime
         make_vehicle(&vehicles[ 2], 25,  5,   0,   0, 255, -3,  0,  5,  1,  3,  4,  5); // blue
@@ -949,7 +949,7 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
         make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
         make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
-        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4, 14,  1); // test
+        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 8, canvaSide + 40);
