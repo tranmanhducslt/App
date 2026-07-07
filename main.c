@@ -191,6 +191,18 @@ int is_vehicle_on_any_road(struct Vehicle v, struct Road* roads, int num_roads){
     return 0;
 }
 
+int is_vehicle_overlapping_others(struct Vehicle v, struct Vehicle* vehicles, int num_vehicles, int self_index){
+    for (int i = 0; i < num_vehicles; i++){
+        if (i == self_index) continue;
+        struct Vehicle other = vehicles[i];
+        if (v.x < other.x + other.length && v.x + v.length > other.x &&
+            v.y < other.y + other.width && v.y + v.width > other.y){
+            return 1; // Overlap detected
+        }
+    }
+    return 0; // No overlap
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    WHCA* — Windowed Hierarchical Cooperative A*
    ─────────────────────────────────────────────
@@ -266,6 +278,9 @@ static int pos_free(int vid, int ax, int ay, int t) {
     temp_v.x = ax;
     temp_v.y = ay;
     if (!is_vehicle_on_any_road(temp_v, g_roads, g_num_roads)) {
+        return 0;
+    }
+    if (is_vehicle_overlapping_others(temp_v, g_vehicles, g_num_vehicles, vid)) {
         return 0;
     }
     
@@ -654,7 +669,7 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 6,
-        vehiNum   = 12,
+        vehiNum   = 13,
         canvaSide = 30,
         stepCount = 30,
         maxSteps  = 8;  // WHCA* lookahead window (re-planned every tick)
@@ -685,6 +700,7 @@ int main(int argc, char *argv[]) {
     make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
     make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
     make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
+    make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  4, 14,  1); // test
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 8, canvaSide + 40);
 
