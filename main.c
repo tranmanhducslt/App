@@ -926,14 +926,36 @@ int main(int argc, char *argv[]) {
         custom_vehi_num = 30; // placeholder threshold
 
     for (int i = 1; i < argc; i++) {
+        // random vehicles
         if (strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "random") == 0) {
             use_random = 1;
-            // if a number succeedes --random, use that as the vehicle count
             if (i + 1 < argc) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
                     custom_vehi_num = atoi(argv[i+1]);
                     if (custom_vehi_num <= 0) {
                         custom_vehi_num = vehiNum;
+                    } 
+                }
+            }
+        }
+        // # of animation steps
+        if (strcmp(argv[i], "--steps") == 0 || strcmp(argv[i], "steps") == 0) {
+            if (i + 1 < argc) {
+                if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
+                    stepCount = atoi(argv[i+1]);
+                    if (stepCount <= 0) {
+                        stepCount = 30;
+                    } 
+                }
+            }
+        }
+        // # of planned steps in WHCA*
+        if (strcmp(argv[i], "--lookahead") == 0 || strcmp(argv[i], "lookahead") == 0) {
+            if (i + 1 < argc) {
+                if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
+                    maxSteps = atoi(argv[i+1]);
+                    if (maxSteps <= 0) {
+                        maxSteps = 8;
                     } 
                 }
             }
