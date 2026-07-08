@@ -908,9 +908,7 @@ int main(int argc, char *argv[]) {
                     custom_vehi_num = atoi(argv[i+1]);
                     if (custom_vehi_num <= 0) {
                         custom_vehi_num = vehiNum;
-                    } else if (custom_vehi_num > 50) {
-                        custom_vehi_num = 50;
-                    }
+                    } 
                 }
             }
         }
