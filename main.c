@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <limits.h>
 #include <time.h>
 
@@ -527,6 +528,12 @@ void resize_terminal(int rows, int cols) {
     }
 }
 
+static double monotonic_ms(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
+}
+
 void draw_scene(struct Road* roads, int num_roads,
                 struct Vehicle* vehicles, int num_vehicles, int side) {
     char scene[side][side];
@@ -572,16 +579,32 @@ void draw_scene(struct Road* roads, int num_roads,
 void run_animation(struct Road* roads, int num_roads,
                    struct Vehicle* vehicles, int num_vehicles,
                    int side, int step_count) {
+    double total_runtime_ms = 0.0;
+
     for (int step = 0; step < step_count; step++) {
-        // Plan (sets dx/dy on every vehicle), then move, then draw
+        double step_start_ms = monotonic_ms();
+
+        double plan_start_ms = monotonic_ms();
         apply_whca_star(roads, num_roads);
+        double plan_ms = monotonic_ms() - plan_start_ms;
 
         printf("\033[2J\033[H");
+
+        double move_start_ms = monotonic_ms();
         for (int i = 0; i < num_vehicles; i++) move_vehicle(&vehicles[i]);
+        double move_ms = monotonic_ms() - move_start_ms;
+
+        double draw_start_ms = monotonic_ms();
         draw_scene(roads, num_roads, vehicles, num_vehicles, side);
+        double draw_ms = monotonic_ms() - draw_start_ms;
+
+        double step_ms = monotonic_ms() - step_start_ms;
+        total_runtime_ms += step_ms;
 
         // ── Per-vehicle HUD ───────────────────────────────────────
         printf("\n Step %2d / %d\n", step + 1, step_count);
+        printf(" Timing: plan %.2f ms | move %.2f ms | draw %.2f ms | total %.2f ms\n",
+               plan_ms, move_ms, draw_ms, step_ms);
         printf(" %-3s %-5s %-17s %-13s %-10s %s\n",
                "V", "Pri", "Position", "Goal", "Move", "Status");
         printf(" ───────────────────────────────────────────────────────────\n");
@@ -594,11 +617,14 @@ void run_animation(struct Road* roads, int num_roads,
                    vehicles[i].x, vehicles[i].y,
                    vehicles[i].goal_x, vehicles[i].goal_y,
                    vehicles[i].dx, vehicles[i].dy,
-                   at_goal ? "\033[32m\xe2\x9c\x93 GOAL\033[0m" : "en route");
+                   at_goal ? "\033[32m✔ GOAL\033[0m" : "en route");
         }
 
         usleep(300000);
     }
+
+    printf("\nTotal animation runtime: %.2f ms (avg per step: %.2f ms)\n",
+           total_runtime_ms, total_runtime_ms / step_count);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -950,7 +976,7 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
-    resize_terminal(canvaSide + vehiNum + 8, canvaSide + 40);
+    resize_terminal(canvaSide + vehiNum + 10, canvaSide + 40);
 
     g_vehicles     = vehicles;
     g_num_vehicles = vehiNum;
