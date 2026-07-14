@@ -300,6 +300,30 @@ static int sign(int val) {
     return (val > 0) - (val < 0);
 }
 
+// Artificial Potential Field heuristic:
+// - attractive term pulls the search toward the goal
+// - repulsive term penalizes states near already-reserved cells
+static int apf_heuristic(int x, int y, int gx, int gy, int vid) {
+    int attraction = abs(x - gx) + abs(y - gy);
+    int repulsion = 0;
+
+    for (int t = 0; t <= g_max_lookahead; t++) {
+        for (int i = 0; i < g_canvas_side; i++) {
+            for (int j = 0; j < g_canvas_side; j++) {
+                int occ = g_spacetime_grid[i][j][t];
+                if (occ == 0 || occ == vid + 1) continue;
+
+                int dist = abs(x - i) + abs(y - j);
+                if (dist < 4) {
+                    repulsion += (4 - dist) * 8;
+                }
+            }
+        }
+    }
+
+    return attraction + repulsion;
+}
+
 // Plans vehicle vid's path to its goal within the current lookahead window.
 //   • Fills planned_dx[] / planned_dy[] with moves.
 //   • Reserves those cells (including intermediate swept cells) in the shared spacetime grid.
@@ -318,8 +342,8 @@ static int whca_astar(int vid) {
 
     MinHeap open = { malloc(ns * sizeof(HNode)), 0, ns };
 
-    // Seed the start state
-    int h0 = abs(sx - gx) + abs(sy - gy);
+    // Seed the start state with an APF-guided heuristic.
+    int h0 = apf_heuristic(sx, sy, gx, gy, vid);
     gval[SIDX(sx, sy, 0)] = 0;
     cf[SIDX(sx, sy, 0)].pt = -1;          // sentinel: no parent
     mh_push(&open, (HNode){sx, sy, 0, 0, h0});
@@ -357,7 +381,7 @@ static int whca_astar(int vid) {
                 if (ng < gval[ni]) {
                     gval[ni] = ng;
                     cf[ni] = (CFEntry){ cx, cy, ct, 0, 0 };
-                    int nh = abs(nx - gx) + abs(ny - gy);
+                    int nh = apf_heuristic(nx, ny, gx, gy, vid);
                     mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
                 }
             }
@@ -388,7 +412,7 @@ static int whca_astar(int vid) {
                 if (ng < gval[ni]) {
                     gval[ni] = ng;
                     cf[ni] = (CFEntry){ cx, cy, ct, mx, my };
-                    int nh = abs(nx - gx) + abs(ny - gy);
+                    int nh = apf_heuristic(nx, ny, gx, gy, vid);
                     mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
                 }
             }
