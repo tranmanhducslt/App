@@ -303,15 +303,24 @@ static int sign(int val) {
 // Artificial Potential Field heuristic:
 // - attractive term pulls the search toward the goal
 // - repulsive term penalizes states near already-reserved cells
+// - only checks cells within a small radius for efficiency
 static int apf_heuristic(int x, int y, int gx, int gy, int vid) {
     int attraction = abs(x - gx) + abs(y - gy);
     int repulsion = 0;
 
-    for (int t = 0; t <= g_max_lookahead; t++) {
-        for (int i = 0; i < g_canvas_side; i++) {
-            for (int j = 0; j < g_canvas_side; j++) {
+    const int SEARCH_RADIUS = 6;  // Only check nearby obstacles
+
+    // Only check current and next timestep for efficiency
+    for (int t = 0; t <= 1 && t <= g_max_lookahead; t++) {
+        // Check only cells within SEARCH_RADIUS of current position
+        for (int i = x - SEARCH_RADIUS; i <= x + SEARCH_RADIUS; i++) {
+            for (int j = y - SEARCH_RADIUS; j <= y + SEARCH_RADIUS; j++) {
+                // Skip out-of-bounds cells
+                if (i < 0 || i >= g_canvas_side || j < 0 || j >= g_canvas_side)
+                    continue;
+
                 int occ = g_spacetime_grid[i][j][t];
-                if (occ == 0 || occ == vid + 1) continue;
+                if (occ == 0 || occ == vid + 1) continue;  // Skip free or own cells
 
                 int dist = abs(x - i) + abs(y - j);
                 if (dist < 4) {
