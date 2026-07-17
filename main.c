@@ -22,7 +22,7 @@ struct Pixel {
 };
 
 struct Road {
-    int x1, y1, x2, y2;
+    int x, y;
     struct Pixel** pixels;
     int length, width;
 };
@@ -93,16 +93,14 @@ void free_spacetime_grid() {
    Road & Vehicle Construction
 ═══════════════════════════════════════════════════════════════════════════ */
 
-void make_road(struct Road* road, int x1, int y1, int x2, int y2) {
-    road->x1 = x1; road->y1 = y1;
-    road->x2 = x2; road->y2 = y2;
-    int length = abs(x2 - x1) + 1, width = abs(y2 - y1) + 1;
+void make_road(struct Road* road, int x, int y, int length, int width) {
+    road->x = x; road->y = y;
     road->length = length; road->width = width;
     road->pixels = malloc(length * width * sizeof(struct Pixel*));
     for (int i = 0; i < length; i++) {
         for (int j = 0; j < width; j++) {
             struct Pixel* p = malloc(sizeof(struct Pixel));
-            p->x = x1 + i; p->y = y1 + j;
+            p->x = x + i; p->y = y + j;
             p->r = 128; p->g = 128; p->b = 128;
             p->dx = p->dy = 0;
             road->pixels[i * width + j] = p;
@@ -180,8 +178,8 @@ void move_vehicle(struct Vehicle* v) {
 }
 
 int is_vehicle_on_road(struct Vehicle v, struct Road road){
-    return (v.x >= road.x1 && v.x + v.length - 1 <= road.x2 &&
-            v.y >= road.y1 && v.y + v.width - 1 <= road.y2);
+    return (v.x >= road.x && v.x + v.length - 1 < road.x + road.length &&
+            v.y >= road.y && v.y + v.width - 1 < road.y + road.width);
 }
 
 int is_vehicle_on_any_road(struct Vehicle v, struct Road* roads, int num_roads){
@@ -349,6 +347,7 @@ static int whca_astar(int vid) {
     int*     gval = malloc(ns * sizeof(int));
     for (int i = 0; i < ns; i++) gval[i] = INT_MAX;
 
+    // Heap for the open set of A*; capacity = number of states in the search space
     MinHeap open = { malloc(ns * sizeof(HNode)), 0, ns };
 
     // Seed the start state with an APF-guided heuristic.
@@ -718,9 +717,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
             int r_idx = rand() % num_roads;
             struct Road road = roads[r_idx];
 
-            int is_horizontal = (road.x2 - road.x1) > (road.y2 - road.y1);
-            int road_width = is_horizontal ? (road.y2 - road.y1 + 1) : (road.x2 - road.x1 + 1);
-            int road_length = is_horizontal ? (road.x2 - road.x1 + 1) : (road.y2 - road.y1 + 1);
+            int is_horizontal = road.length > road.width;
+            int road_width = is_horizontal ? road.width : road.length;
+            int road_length = is_horizontal ? road.length : road.width;
 
             int max_v_width = road_width / 2;
             if (max_v_width < 1) max_v_width = 1;
@@ -742,15 +741,15 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (east) {
                     dx = speed;
                     dy = 0;
-                    y_start = road.y2 - v_width + 1;
+                    y_start = road.y + road.width - v_width;
                     y_goal = y_start;
 
-                    int x_range = road.x2 - road.x1 + 1 - v_length + 1;
+                    int x_range = road.x + road.length - v_length;
                     if (x_range > 1) {
-                        int x_a = road.x1 + (rand() % x_range);
-                        int x_b = road.x1 + (rand() % x_range);
+                        int x_a = road.x + (rand() % x_range);
+                        int x_b = road.x + (rand() % x_range);
                         if (x_a == x_b) {
-                            if (x_a > road.x1) x_a--;
+                            if (x_a > road.x) x_a--;
                             else x_b++;
                         }
                         if (x_a < x_b) {
@@ -761,21 +760,21 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                             x_goal = x_a;
                         }
                     } else {
-                        x_start = road.x1;
-                        x_goal = road.x1;
+                        x_start = road.x;
+                        x_goal = road.x + road.length - v_length;
                     }
                 } else {
                     dx = -speed;
                     dy = 0;
-                    y_start = road.y1;
+                    y_start = road.y;
                     y_goal = y_start;
 
-                    int x_range = road.x2 - road.x1 + 1 - v_length + 1;
+                    int x_range = road.x + road.length - v_length;
                     if (x_range > 1) {
-                        int x_a = road.x1 + (rand() % x_range);
-                        int x_b = road.x1 + (rand() % x_range);
+                        int x_a = road.x + (rand() % x_range);
+                        int x_b = road.x + (rand() % x_range);
                         if (x_a == x_b) {
-                            if (x_a > road.x1) x_a--;
+                            if (x_a > road.x) x_a--;
                             else x_b++;
                         }
                         if (x_a > x_b) {
@@ -786,8 +785,8 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                             x_goal = x_a;
                         }
                     } else {
-                        x_start = road.x1;
-                        x_goal = road.x1;
+                        x_start = road.x;
+                        x_goal = road.x + road.length - v_length;
                     }
                 }
             } else {
@@ -795,15 +794,15 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (south) {
                     dx = 0;
                     dy = speed;
-                    x_start = road.x1;
+                    x_start = road.x;
                     x_goal = x_start;
 
-                    int y_range = road.y2 - road.y1 + 1 - v_length + 1;
+                    int y_range = road.y + road.width - v_length;
                     if (y_range > 1) {
-                        int y_a = road.y1 + (rand() % y_range);
-                        int y_b = road.y1 + (rand() % y_range);
+                        int y_a = road.y + (rand() % y_range);
+                        int y_b = road.y + (rand() % y_range);
                         if (y_a == y_b) {
-                            if (y_a > road.y1) y_a--;
+                            if (y_a > road.y) y_a--;
                             else y_b++;
                         }
                         if (y_a < y_b) {
@@ -814,21 +813,21 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                             y_goal = y_a;
                         }
                     } else {
-                        y_start = road.y1;
-                        y_goal = road.y1;
+                        y_start = road.y;
+                        y_goal = road.y + road.width;
                     }
                 } else {
                     dx = 0;
                     dy = -speed;
-                    x_start = road.x2 - v_width + 1;
+                    x_start = road.x + road.length - v_width;
                     x_goal = x_start;
 
-                    int y_range = road.y2 - road.y1 + 1 - v_length + 1;
+                    int y_range = road.y + road.width - v_length;
                     if (y_range > 1) {
-                        int y_a = road.y1 + (rand() % y_range);
-                        int y_b = road.y1 + (rand() % y_range);
+                        int y_a = road.y + (rand() % y_range);
+                        int y_b = road.y + (rand() % y_range);
                         if (y_a == y_b) {
-                            if (y_a > road.y1) y_a--;
+                            if (y_a > road.y) y_a--;
                             else y_b++;
                         }
                         if (y_a > y_b) {
@@ -839,8 +838,8 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                             y_goal = y_a;
                         }
                     } else {
-                        y_start = road.y1;
-                        y_goal = road.y1;
+                        y_start = road.y;
+                        y_goal = road.y + road.width;
                     }
                 }
             }
@@ -872,9 +871,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
         if (!placed) {
             for (int r_idx = 0; r_idx < num_roads; r_idx++) {
                 struct Road road = roads[r_idx];
-                int is_horizontal = (road.x2 - road.x1) > (road.y2 - road.y1);
-                int y_pos = is_horizontal ? (road.y2) : (road.y1);
-                int x_pos = is_horizontal ? (road.x1) : (road.x2);
+                int is_horizontal = (road.x + road.length) > (road.y + road.width);
+                int y_pos = is_horizontal ? (road.y + road.width) : (road.y);
+                int x_pos = is_horizontal ? (road.x) : (road.x + road.length);
 
                 struct Vehicle temp_v;
                 temp_v.x = x_pos;
@@ -1005,12 +1004,12 @@ int main(int argc, char *argv[]) {
     struct Vehicle vehicles[vehiNum];
 
     // Road layout
-    make_road(&roads[0],  0,  5, 29,  8); 
-    make_road(&roads[1], 10,  0, 15, 29); 
-    make_road(&roads[2], 10, 12, 29, 15); 
-    make_road(&roads[3], 20,  5, 23, 29);
-    make_road(&roads[4],  0, 27, 29, 28);
-    make_road(&roads[5],  0, 20, 23, 21);
+    make_road(&roads[0],  0,  5, 30,  4); 
+    make_road(&roads[1], 10,  0,  6, 30); 
+    make_road(&roads[2], 10, 12, 20,  4); 
+    make_road(&roads[3], 20,  5,  4, 25);
+    make_road(&roads[4],  0, 27, 30,  2);
+    make_road(&roads[5],  0, 20, 24,  2);
 
     if (use_random) {
         // how many until lock?
