@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -255,6 +257,44 @@ typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
 
 // ── Collision predicate ───────────────────────────────────────────────────
 
+static void get_preferred_lane_anchor(const struct Road* road,
+                                      int travel_dx, int travel_dy,
+                                      int vehicle_length, int vehicle_width,
+                                      int* lane_x, int* lane_y) {
+    if (road->length > road->width) {
+        *lane_x = 0;
+        *lane_y = (travel_dx >= 0) ? (road->y + road->width - vehicle_width) : road->y;
+    } else {
+        *lane_y = 0;
+        *lane_x = (travel_dy >= 0) ? road->x : (road->x + road->length - vehicle_length);
+    }
+}
+
+static struct Road* find_road_for_position(const struct Vehicle* v, int ax, int ay) {
+    for (int i = 0; i < g_num_roads; i++) {
+        struct Road* road = &g_roads[i];
+        if (ax >= road->x && ax + v->length - 1 < road->x + road->length &&
+            ay >= road->y && ay + v->width - 1 < road->y + road->width) {
+            return road;
+        }
+    }
+    return NULL;
+}
+
+static int is_vehicle_on_preferred_lane(const struct Vehicle* v, int ax, int ay) {
+    struct Road* road = find_road_for_position(v, ax, ay);
+    if (!road) return 0;
+
+    int travel_dx = (v->dx != 0) ? v->dx : v->orig_dx;
+    int travel_dy = (v->dy != 0) ? v->dy : v->orig_dy;
+    int lane_x = 0, lane_y = 0;
+
+    get_preferred_lane_anchor(road, travel_dx, travel_dy,
+                              v->length, v->width, &lane_x, &lane_y);
+
+    return (road->length > road->width) ? (ay == lane_y) : (ax == lane_x);
+}
+
 // Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
 // within bounds, free of foreign reservations at timestep t, and entirely on roads.
 static int pos_free(int vid, int ax, int ay, int t) {
@@ -273,6 +313,11 @@ static int pos_free(int vid, int ax, int ay, int t) {
         }
     }
     
+    // Keep vehicles on the rightmost lane of the road they are on.
+    if (!is_vehicle_on_preferred_lane(v, ax, ay)) {
+        return 0;
+    }
+
     // Check that the vehicle is entirely on roads
     struct Vehicle temp_v = *v;
     temp_v.x = ax;
@@ -741,7 +786,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (east) {
                     dx = speed;
                     dy = 0;
-                    y_start = road.y + road.width - v_width;
+                    int lane_x = 0, lane_y = 0;
+                    get_preferred_lane_anchor(&road, dx, dy, v_length, v_width, &lane_x, &lane_y);
+                    y_start = lane_y;
                     y_goal = y_start;
 
                     int x_range = road.x + road.length - v_length;
@@ -766,7 +813,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 } else {
                     dx = -speed;
                     dy = 0;
-                    y_start = road.y;
+                    int lane_x = 0, lane_y = 0;
+                    get_preferred_lane_anchor(&road, dx, dy, v_length, v_width, &lane_x, &lane_y);
+                    y_start = lane_y;
                     y_goal = y_start;
 
                     int x_range = road.x + road.length - v_length;
@@ -794,7 +843,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (south) {
                     dx = 0;
                     dy = speed;
-                    x_start = road.x;
+                    int lane_x = 0, lane_y = 0;
+                    get_preferred_lane_anchor(&road, dx, dy, v_width, v_length, &lane_x, &lane_y);
+                    x_start = lane_x;
                     x_goal = x_start;
 
                     int y_range = road.y + road.width - v_length;
@@ -819,7 +870,9 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 } else {
                     dx = 0;
                     dy = -speed;
-                    x_start = road.x + road.length - v_width;
+                    int lane_x = 0, lane_y = 0;
+                    get_preferred_lane_anchor(&road, dx, dy, v_width, v_length, &lane_x, &lane_y);
+                    x_start = lane_x;
                     x_goal = x_start;
 
                     int y_range = road.y + road.width - v_length;
