@@ -727,34 +727,17 @@ void free_memory(struct Road* roads, int num_roads,
    Random Vehicle Generation
 ═══════════════════════════════════════════════════════════════════════════ */
 
+int* rand_col() {
+    int* rgb = malloc(3 * sizeof(int));
+    rgb[0] = rand() % 256; // Red
+    rgb[1] = rand() % 256; // Green
+    rgb[2] = rand() % 256; // Blue
+    return rgb;
+}
+
 void generate_random_vehicles(struct Road* roads, int num_roads,
                               struct Vehicle* vehicles, int num_vehicles) {
-    srand(time(NULL));
-
-    int colors[][3] = {
-        {255, 0, 0},    // Red
-        {0, 255, 0},    // Lime
-        {0, 0, 255},    // Blue
-        {255, 0, 255},  // Magenta
-        {0, 255, 255},  // Cyan
-        {255, 255, 0},  // Yellow
-        {255, 128, 0},  // Orange
-        {0, 128, 0},    // Green
-        {128, 0, 128},  // Purple
-        {255, 0, 127},  // Rose
-        {128, 128, 128},// Grey
-        {192, 192, 192},// Silver
-        {255, 102, 102},// Coral
-        {255, 178, 102},// Light Orange
-        {178, 255, 102},// Lime Green
-        {102, 255, 178},// Mint
-        {102, 255, 255},// Ice Blue
-        {102, 178, 255},// Sky Blue
-        {178, 102, 255},// Lavender
-        {255, 102, 255},// Pink
-        {255, 102, 178} // Deep Pink
-    };
-    int num_colors = sizeof(colors) / sizeof(colors[0]);
+    srand(time(NULL)); 
 
     for (int v_idx = 0; v_idx < num_vehicles; v_idx++) {
         int placed = 0;
@@ -910,7 +893,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
 
             if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1)) {
                 if (is_vehicle_on_any_road(temp_v, roads, num_roads)) {
-                    int* col = colors[v_idx % num_colors];
+                    int* col = rand_col();
                     int priority = v_idx + 1;
 
                     make_vehicle(&vehicles[v_idx], x_start, y_start, col[0], col[1], col[2],
@@ -936,7 +919,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
 
                 if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1) &&
                     is_vehicle_on_any_road(temp_v, roads, num_roads)) {
-                    int* col = colors[v_idx % num_colors];
+                    int* col = rand_col();
                     int priority = v_idx + 1;
                     make_vehicle(&vehicles[v_idx], x_pos, y_pos, col[0], col[1], col[2],
                                  0, 0, 1, 1, priority, x_pos, y_pos);
