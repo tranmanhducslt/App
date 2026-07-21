@@ -1,5 +1,3 @@
-#define _DEFAULT_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -257,44 +255,6 @@ typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
 
 // ── Collision predicate ───────────────────────────────────────────────────
 
-static void get_preferred_lane_anchor(const struct Road* road,
-                                      int travel_dx, int travel_dy,
-                                      int vehicle_length, int vehicle_width,
-                                      int* lane_x, int* lane_y) {
-    if (road->length > road->width) {
-        *lane_x = 0;
-        *lane_y = (travel_dx >= 0) ? (road->y + road->width - vehicle_width) : road->y;
-    } else {
-        *lane_y = 0;
-        *lane_x = (travel_dy >= 0) ? road->x : (road->x + road->length - vehicle_length);
-    }
-}
-
-static struct Road* find_road_for_position(const struct Vehicle* v, int ax, int ay) {
-    for (int i = 0; i < g_num_roads; i++) {
-        struct Road* road = &g_roads[i];
-        if (ax >= road->x && ax + v->length - 1 < road->x + road->length &&
-            ay >= road->y && ay + v->width - 1 < road->y + road->width) {
-            return road;
-        }
-    }
-    return NULL;
-}
-
-static int is_vehicle_on_preferred_lane(const struct Vehicle* v, int ax, int ay) {
-    struct Road* road = find_road_for_position(v, ax, ay);
-    if (!road) return 0;
-
-    int travel_dx = (v->dx != 0) ? v->dx : v->orig_dx;
-    int travel_dy = (v->dy != 0) ? v->dy : v->orig_dy;
-    int lane_x = 0, lane_y = 0;
-
-    get_preferred_lane_anchor(road, travel_dx, travel_dy,
-                              v->length, v->width, &lane_x, &lane_y);
-
-    return (road->length > road->width) ? (ay == lane_y) : (ax == lane_x);
-}
-
 // Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
 // within bounds, free of foreign reservations at timestep t, and entirely on roads.
 static int pos_free(int vid, int ax, int ay, int t) {
@@ -313,11 +273,6 @@ static int pos_free(int vid, int ax, int ay, int t) {
         }
     }
     
-    // Keep vehicles on the rightmost lane of the road they are on.
-    if (!is_vehicle_on_preferred_lane(v, ax, ay)) {
-        return 0;
-    }
-
     // Check that the vehicle is entirely on roads
     struct Vehicle temp_v = *v;
     temp_v.x = ax;
@@ -727,17 +682,34 @@ void free_memory(struct Road* roads, int num_roads,
    Random Vehicle Generation
 ═══════════════════════════════════════════════════════════════════════════ */
 
-int* rand_col() {
-    int* rgb = malloc(3 * sizeof(int));
-    rgb[0] = rand() % 256; // Red
-    rgb[1] = rand() % 256; // Green
-    rgb[2] = rand() % 256; // Blue
-    return rgb;
-}
-
 void generate_random_vehicles(struct Road* roads, int num_roads,
                               struct Vehicle* vehicles, int num_vehicles) {
-    srand(time(NULL)); 
+    srand(time(NULL));
+
+    int colors[][3] = {
+        {255, 0, 0},    // Red
+        {0, 255, 0},    // Lime
+        {0, 0, 255},    // Blue
+        {255, 0, 255},  // Magenta
+        {0, 255, 255},  // Cyan
+        {255, 255, 0},  // Yellow
+        {255, 128, 0},  // Orange
+        {0, 128, 0},    // Green
+        {128, 0, 128},  // Purple
+        {255, 0, 127},  // Rose
+        {128, 128, 128},// Grey
+        {192, 192, 192},// Silver
+        {255, 102, 102},// Coral
+        {255, 178, 102},// Light Orange
+        {178, 255, 102},// Lime Green
+        {102, 255, 178},// Mint
+        {102, 255, 255},// Ice Blue
+        {102, 178, 255},// Sky Blue
+        {178, 102, 255},// Lavender
+        {255, 102, 255},// Pink
+        {255, 102, 178} // Deep Pink
+    };
+    int num_colors = sizeof(colors) / sizeof(colors[0]);
 
     for (int v_idx = 0; v_idx < num_vehicles; v_idx++) {
         int placed = 0;
@@ -769,9 +741,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (east) {
                     dx = speed;
                     dy = 0;
-                    int lane_x = 0, lane_y = 0;
-                    get_preferred_lane_anchor(&road, dx, dy, v_length, v_width, &lane_x, &lane_y);
-                    y_start = lane_y;
+                    y_start = road.y + road.width - v_width;
                     y_goal = y_start;
 
                     int x_range = road.x + road.length - v_length;
@@ -796,9 +766,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 } else {
                     dx = -speed;
                     dy = 0;
-                    int lane_x = 0, lane_y = 0;
-                    get_preferred_lane_anchor(&road, dx, dy, v_length, v_width, &lane_x, &lane_y);
-                    y_start = lane_y;
+                    y_start = road.y;
                     y_goal = y_start;
 
                     int x_range = road.x + road.length - v_length;
@@ -826,9 +794,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 if (south) {
                     dx = 0;
                     dy = speed;
-                    int lane_x = 0, lane_y = 0;
-                    get_preferred_lane_anchor(&road, dx, dy, v_width, v_length, &lane_x, &lane_y);
-                    x_start = lane_x;
+                    x_start = road.x;
                     x_goal = x_start;
 
                     int y_range = road.y + road.width - v_length;
@@ -853,9 +819,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
                 } else {
                     dx = 0;
                     dy = -speed;
-                    int lane_x = 0, lane_y = 0;
-                    get_preferred_lane_anchor(&road, dx, dy, v_width, v_length, &lane_x, &lane_y);
-                    x_start = lane_x;
+                    x_start = road.x + road.length - v_width;
                     x_goal = x_start;
 
                     int y_range = road.y + road.width - v_length;
@@ -893,7 +857,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
 
             if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1)) {
                 if (is_vehicle_on_any_road(temp_v, roads, num_roads)) {
-                    int* col = rand_col();
+                    int* col = colors[v_idx % num_colors];
                     int priority = v_idx + 1;
 
                     make_vehicle(&vehicles[v_idx], x_start, y_start, col[0], col[1], col[2],
@@ -919,7 +883,7 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
 
                 if (!is_vehicle_overlapping_others(temp_v, vehicles, v_idx, -1) &&
                     is_vehicle_on_any_road(temp_v, roads, num_roads)) {
-                    int* col = rand_col();
+                    int* col = colors[v_idx % num_colors];
                     int priority = v_idx + 1;
                     make_vehicle(&vehicles[v_idx], x_pos, y_pos, col[0], col[1], col[2],
                                  0, 0, 1, 1, priority, x_pos, y_pos);
