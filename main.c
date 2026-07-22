@@ -931,23 +931,23 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 6,
-        vehiNum   = 13,
+        vehiNum   = 14,
         canvaSide = 30,
         stepCount = 30,
         maxSteps  = 5;  // WHCA* lookahead window (re-planned every tick)
 
-    int use_random = 0,
-        custom_vehi_num = 30; // placeholder threshold
+    int use_random = 0;
 
+    /* zeroing values are to debug*/
     for (int i = 1; i < argc; i++) {
         // random vehicles
         if (strcmp(argv[i], "--random") == 0 || strcmp(argv[i], "random") == 0) {
             use_random = 1;
             if (i + 1 < argc) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
-                    custom_vehi_num = atoi(argv[i+1]);
-                    if (custom_vehi_num <= 0) {
-                        custom_vehi_num = vehiNum;
+                    vehiNum = atoi(argv[i+1]);
+                    if (vehiNum < 0) {
+                        vehiNum = 14;
                     } 
                 }
             }
@@ -957,7 +957,7 @@ int main(int argc, char *argv[]) {
             if (i + 1 < argc) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
                     stepCount = atoi(argv[i+1]);
-                    if (stepCount <= 0) {
+                    if (stepCount < 0) {
                         stepCount = 30;
                     } 
                 }
@@ -968,16 +968,12 @@ int main(int argc, char *argv[]) {
             if (i + 1 < argc) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
                     maxSteps = atoi(argv[i+1]);
-                    if (maxSteps <= 0) {
-                        maxSteps = 8;
+                    if (maxSteps < 0) {
+                        maxSteps = 5;
                     } 
                 }
             }
         }
-    }
-
-    if (use_random) {
-        vehiNum = custom_vehi_num;
     }
 
     init_spacetime_grid(canvaSide, maxSteps);
@@ -1003,13 +999,14 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[ 3], 23, 26, 255,   0, 255,  0, -2,  1,  4,  2, 23,  8); // magenta
         make_vehicle(&vehicles[ 4], 14, 22,   0, 255, 255,  0,  3,  1,  2,  3, 14,  0); // cyan
         make_vehicle(&vehicles[ 5], 25, 12, 255, 255,   0, -3,  0,  3,  2,  1, 17, 12); // yellow
-        make_vehicle(&vehicles[ 6],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
-        make_vehicle(&vehicles[ 7], 20,  5,   0, 128,   0, -1,  0,  2,  2,  3,  1,  5); // green
-        make_vehicle(&vehicles[ 8], 15, 20, 128,   0, 128,  0, -2,  1,  2,  1, 13,  2); // purple
-        make_vehicle(&vehicles[ 9], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
-        make_vehicle(&vehicles[10], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
-        make_vehicle(&vehicles[11],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
-        make_vehicle(&vehicles[12], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
+        make_vehicle(&vehicles[ 6], 12,  0, 150,  75,   0,  0,  2,  1,  3,  2, 11, 20); // brown
+        make_vehicle(&vehicles[ 7],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
+        make_vehicle(&vehicles[ 8], 20,  5,   0, 128,   0, -1,  0,  2,  2,  3,  1,  5); // green
+        make_vehicle(&vehicles[ 9], 15, 20, 128,   0, 128,  0, -2,  1,  2,  1, 13,  2); // purple
+        make_vehicle(&vehicles[10], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
+        make_vehicle(&vehicles[11], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
+        make_vehicle(&vehicles[12],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
+        make_vehicle(&vehicles[13], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 10, canvaSide + 40);
