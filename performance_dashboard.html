@@ -8,8 +8,8 @@
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: #f8fafc;
+            color: #0f172a;
             margin: 0;
             padding: 40px 20px;
         }
@@ -23,11 +23,11 @@
         }
         h1 {
             font-size: 2.5rem;
-            color: #38bdf8;
+            color: #0f766e;
             margin-bottom: 10px;
         }
         p.subtitle {
-            color: #94a3b8;
+            color: #475569;
             font-size: 1.1rem;
         }
         .grid {
@@ -42,18 +42,18 @@
             }
         }
         .card {
-            background-color: #1e293b;
+            background-color: #ffffff;
             border-radius: 12px;
             padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+            border: 1px solid #e2e8f0;
         }
         h2 {
             font-size: 1.4rem;
             margin-top: 0;
             margin-bottom: 20px;
-            color: #f1f5f9;
-            border-bottom: 2px solid #334155;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
             padding-bottom: 10px;
         }
         table {
@@ -64,14 +64,14 @@
         th, td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #334155;
+            border-bottom: 1px solid #e2e8f0;
         }
         th {
-            color: #38bdf8;
+            color: #0f766e;
             font-weight: 600;
         }
         tr:hover {
-            background-color: #1e293b;
+            background-color: #f8fafc;
         }
     </style>
 </head>
@@ -200,18 +200,18 @@
                             callback: function(value) {
                                 return (value * 100) + '%';
                             },
-                            color: '#94a3b8'
+                            color: '#475569'
                         },
-                        grid: { color: '#334155' }
+                        grid: { color: '#e2e8f0' }
                     },
                     x: {
-                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'maxSteps', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: '#f8fafc' } }
+                    legend: { labels: { color: '#0f172a' } }
                 }
             }
         });
@@ -238,18 +238,18 @@
                 responsive: true,
                 scales: {
                     y: {
-                        title: { display: true, text: 'ms per tick', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'ms per tick', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     },
                     x: {
-                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'maxSteps', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: '#f8fafc' } }
+                    legend: { labels: { color: '#0f172a' } }
                 }
             }
         });
