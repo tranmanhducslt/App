@@ -931,7 +931,7 @@ int main(int argc, char *argv[]) {
     handle_terminal_relaunch(argc, argv);
 
     int roadNum   = 6,
-        vehiNum   = 14,
+        vehiNum   = 15,
         canvaSide = 30,
         stepCount = 30,
         maxSteps  = 5;  // WHCA* lookahead window (re-planned every tick)
@@ -947,7 +947,7 @@ int main(int argc, char *argv[]) {
                 if (argv[i+1][0] != '-' && strcmp(argv[i+1], "--child") != 0) {
                     vehiNum = atoi(argv[i+1]);
                     if (vehiNum < 0) {
-                        vehiNum = 14;
+                        vehiNum = 15;
                     } 
                 }
             }
@@ -1002,11 +1002,12 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[ 6], 12,  0, 150,  75,   0,  0,  2,  1,  3,  2, 11, 20); // brown
         make_vehicle(&vehicles[ 7],  0,  8, 255, 128,   0,  3,  0,  3,  1,  2, 24,  8); // orange
         make_vehicle(&vehicles[ 8], 20,  5,   0, 128,   0, -1,  0,  2,  2,  3,  1,  5); // green
-        make_vehicle(&vehicles[ 9], 15, 20, 128,   0, 128,  0, -2,  1,  2,  1, 13,  2); // purple
-        make_vehicle(&vehicles[10], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
-        make_vehicle(&vehicles[11], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
-        make_vehicle(&vehicles[12],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
-        make_vehicle(&vehicles[13], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
+        make_vehicle(&vehicles[ 9], 29, 14, 152, 251, 203, -1,  0,  2,  1,  3, 16, 15); // mint
+        make_vehicle(&vehicles[10], 15, 20, 128,   0, 128,  0, -2,  1,  2,  1, 13,  2); // purple
+        make_vehicle(&vehicles[11], 15, 25, 255,   0, 127,  0, -4,  1,  4,  4, 15,  1); // rose
+        make_vehicle(&vehicles[12], 27, 27, 128, 128, 128, -1,  0,  2,  1,  2,  0, 27); // grey
+        make_vehicle(&vehicles[13],  0, 21, 192, 192, 192,  1,  0,  3,  1,  4, 17, 21); // silver
+        make_vehicle(&vehicles[14], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
     resize_terminal(canvaSide + vehiNum + 10, canvaSide + 40);
