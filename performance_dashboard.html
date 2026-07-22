@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WHCA* Performance Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            color: #38bdf8;
+            margin-bottom: 10px;
+        }
+        p.subtitle {
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .card {
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid #334155;
+        }
+        h2 {
+            font-size: 1.4rem;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #f1f5f9;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+        th {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #1e293b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WHCA* Lookahead Benchmark</h1>
+            <p class="subtitle">Statistical evaluation of vehicle behavior and computational complexity under varying lookahead window sizes (maxSteps).</p>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Goal Success Rate (%) vs. maxSteps</h2>
+                <canvas id="successChart"></canvas>
+            </div>
+            <div class="card">
+                <h2>Planning Time (ms/tick) vs. maxSteps</h2>
+                <canvas id="timeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Statistical Summary Table</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>maxSteps</th>
+                        <th>Mean Success Rate</th>
+                        <th>95% Confidence Interval (Success)</th>
+                        <th>Mean Planning Time (ms/tick)</th>
+                        <th>95% Confidence Interval (Time)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td>66.7%</td>
+                        <td>&plusmn; 0.0%</td>
+                        <td>0.084 ms</td>
+                        <td>&plusmn; 0.006 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>4</strong></td>
+                        <td>72.4%</td>
+                        <td>&plusmn; 1.2%</td>
+                        <td>0.306 ms</td>
+                        <td>&plusmn; 0.010 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>8</strong></td>
+                        <td>73.3%</td>
+                        <td>&plusmn; 0.0%</td>
+                        <td>1.585 ms</td>
+                        <td>&plusmn; 0.259 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>12</strong></td>
+                        <td>77.3%</td>
+                        <td>&plusmn; 1.7%</td>
+                        <td>2.968 ms</td>
+                        <td>&plusmn; 0.728 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>16</strong></td>
+                        <td>77.8%</td>
+                        <td>&plusmn; 3.8%</td>
+                        <td>4.314 ms</td>
+                        <td>&plusmn; 1.111 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>24</strong></td>
+                        <td>87.1%</td>
+                        <td>&plusmn; 7.3%</td>
+                        <td>3.080 ms</td>
+                        <td>&plusmn; 1.182 ms</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>32</strong></td>
+                        <td>72.9%</td>
+                        <td>&plusmn; 6.3%</td>
+                        <td>13.150 ms</td>
+                        <td>&plusmn; 2.581 ms</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const summaryData = [{"maxSteps": 2, "mean_success_rate": 0.6666666666666666, "ci_success_rate": 0.0, "mean_plan_time_ms": 0.08397333333333333, "ci_plan_time_ms": 0.00624977841242747}, {"maxSteps": 4, "mean_success_rate": 0.7244444444444443, "ci_success_rate": 0.011871243395410876, "mean_plan_time_ms": 0.3059733333333333, "ci_plan_time_ms": 0.00989458427311516}, {"maxSteps": 8, "mean_success_rate": 0.7333333333333333, "ci_success_rate": 0.0, "mean_plan_time_ms": 1.58524, "ci_plan_time_ms": 0.25864427918183946}, {"maxSteps": 12, "mean_success_rate": 0.7733333333333333, "ci_success_rate": 0.01710828259450183, "mean_plan_time_ms": 2.9676666666666667, "ci_plan_time_ms": 0.7281003446058181}, {"maxSteps": 16, "mean_success_rate": 0.7777777777777779, "ci_success_rate": 0.03754016778772926, "mean_plan_time_ms": 4.3144, "ci_plan_time_ms": 1.1107112946955509}, {"maxSteps": 24, "mean_success_rate": 0.8711111111111111, "ci_success_rate": 0.07265893264993067, "mean_plan_time_ms": 3.0802133333333335, "ci_plan_time_ms": 1.182112280570005}, {"maxSteps": 32, "mean_success_rate": 0.7288888888888889, "ci_success_rate": 0.06307504446742708, "mean_plan_time_ms": 13.150493333333335, "ci_plan_time_ms": 2.5811254817143765}];
+        const labels = summaryData.map(d => d.maxSteps);
+        
+        // Success Chart
+        const successCtx = document.getElementById('successChart').getContext('2d');
+        new Chart(successCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Mean Success Rate',
+                    data: summaryData.map(d => d.mean_success_rate),
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                    tension: 0.1,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#06b6d4'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 1.0,
+                        ticks: {
+                            callback: function(value) {
+                                return (value * 100) + '%';
+                            },
+                            color: '#94a3b8'
+                        },
+                        grid: { color: '#334155' }
+                    },
+                    x: {
+                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f8fafc' } }
+                }
+            }
+        });
+
+        // Planning Time Chart
+        const timeCtx = document.getElementById('timeChart').getContext('2d');
+        new Chart(timeCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Mean Planning Time (ms)',
+                    data: summaryData.map(d => d.mean_plan_time_ms),
+                    borderColor: '#f43f5e',
+                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    tension: 0.1,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#f43f5e'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        title: { display: true, text: 'ms per tick', color: '#94a3b8' },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    },
+                    x: {
+                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f8fafc' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
