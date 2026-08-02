@@ -40,6 +40,7 @@ struct Vehicle {
     int goal_x, goal_y;             // Destination anchor the vehicle is driving toward
     int planned_dx[MAX_LOOKAHEAD];  // Unit moves planned by A* for each lookahead step
     int planned_dy[MAX_LOOKAHEAD];
+    int planned_turn[MAX_LOOKAHEAD]; // Turn decision (1 if turned sideways on this step, 0 otherwise)
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -138,30 +139,18 @@ void make_vehicle(struct Vehicle* v,
     v->goal_x = goal_x; v->goal_y = goal_y;
     memset(v->planned_dx, 0, sizeof(v->planned_dx));
     memset(v->planned_dy, 0, sizeof(v->planned_dy));
+    memset(v->planned_turn, 0, sizeof(v->planned_turn));
     build_vehicle_pixels(v);
 }
 
-// Placeholder vehicle turner. Will change later.
+// Turns a vehicle sideways by swapping its length and width and rebuilding its pixel representation.
+void turn_vehicle(struct Vehicle* v){
+    // Swap length and width
+    int temp = v->length;
+    v->length = v->width;
+    v->width = temp;
 
-void turn_vehicle(struct Vehicle* v, int new_dx, int new_dy, int new_x, int new_y) {
-    // 1. Update anchor and velocity hints
-    v->x = new_x;
-    v->y = new_y;
-    v->dx = new_dx;
-    v->dy = new_dy;
-    v->orig_dx = new_dx;
-    v->orig_dy = new_dy;
-
-    // 2. Rotate dimensions (swap length and width if changing orientation)
-    int old_oriented_horizontally = (v->orig_dx != 0);
-    int new_oriented_horizontally = (new_dx != 0);
-    if (old_oriented_horizontally != new_oriented_horizontally) {
-        int temp = v->length;
-        v->length = v->width;
-        v->width = temp;
-    }
-
-    // 3. Free old pixels and rebuild them at the new position/orientation
+    // Free old pixels and rebuild them at the new position/orientation
     for (int j = 0; j < v->num_pixels; j++) {
         free(v->pixels[j]);
     }
@@ -248,7 +237,7 @@ static HNode mh_pop(MinHeap* h) {
 // ── Came-from table (path reconstruction) ────────────────────────────────
 
 // Records how we arrived at each (x, y, t) cell during A*.
-typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
+typedef struct { int px, py, pt, mdx, mdy, turn; } CFEntry;
 
 // Flat index into the (x, y, t) state space.
 #define SIDX(x, y, t) (((x) * g_canvas_side + (y)) * (g_max_lookahead + 1) + (t))
@@ -257,12 +246,18 @@ typedef struct { int px, py, pt, mdx, mdy; } CFEntry;
 
 // Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
 // within bounds, free of foreign reservations at timestep t, and entirely on roads.
-static int pos_free(int vid, int ax, int ay, int t) {
+static int pos_free(int vid, int ax, int ay, int t, int need_turn) {
     struct Vehicle* v = &g_vehicles[vid];
     
+    int length = v->length, width = v->width;
+    if (need_turn){
+        length = v->width;
+        width = v->length;
+    }
+
     // Check bounds and reservations for each cell of the vehicle
-    for (int i = 0; i < v->length; i++) {
-        for (int j = 0; j < v->width; j++) {
+    for (int i = 0; i < length; i++) {
+        for (int j = 0; j < width; j++) {
             int px = ax + i, py = ay + j;
             if (px < 0 || px >= g_canvas_side ||
                 py < 0 || py >= g_canvas_side) return 0;
@@ -277,6 +272,8 @@ static int pos_free(int vid, int ax, int ay, int t) {
     struct Vehicle temp_v = *v;
     temp_v.x = ax;
     temp_v.y = ay;
+    temp_v.length = length;
+    temp_v.width = width;
     if (!is_vehicle_on_any_road(temp_v, g_roads, g_num_roads)) {
         return 0;
     }
@@ -384,11 +381,20 @@ static int whca_astar(int vid) {
         // 1. Wait action (move of 0 steps)
         {
             int nx = cx, ny = cy, nt = ct + 1;
-            if (pos_free(vid, nx, ny, nt)) {
+            int turn_needed = 0;
+            int valid = 1;
+            if (!pos_free(vid, nx, ny, nt, 0)) {
+                if (pos_free(vid, nx, ny, nt, 1)) {
+                    turn_needed = 1;
+                } else {
+                    valid = 0;
+                }
+            }
+            if (valid) {
                 int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
                 if (ng < gval[ni]) {
                     gval[ni] = ng;
-                    cf[ni] = (CFEntry){ cx, cy, ct, 0, 0 };
+                    cf[ni] = (CFEntry){ cx, cy, ct, 0, 0, turn_needed };
                     int nh = apf_heuristic(nx, ny, gx, gy, vid);
                     mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
                 }
@@ -406,12 +412,17 @@ static int whca_astar(int vid) {
 
                 // Check all cells swept through (Option B)
                 int possible = 1;
+                int turn_needed = 0;
                 for (int step = 1; step <= k; step++) {
                     int ix = cx + dx_dir[d] * step;
                     int iy = cy + dy_dir[d] * step;
-                    if (!pos_free(vid, ix, iy, nt)) {
-                        possible = 0;
-                        break;
+                    if (!pos_free(vid, ix, iy, nt, 0)) {
+                        if (pos_free(vid, ix, iy, nt, 1)) {
+                            turn_needed = 1;
+                        } else {
+                            possible = 0;
+                            break;
+                        }
                     }
                 }
                 if (!possible) continue;
@@ -419,7 +430,7 @@ static int whca_astar(int vid) {
                 int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
                 if (ng < gval[ni]) {
                     gval[ni] = ng;
-                    cf[ni] = (CFEntry){ cx, cy, ct, mx, my };
+                    cf[ni] = (CFEntry){ cx, cy, ct, mx, my, turn_needed };
                     int nh = apf_heuristic(nx, ny, gx, gy, vid);
                     mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
                 }
@@ -430,11 +441,13 @@ static int whca_astar(int vid) {
     // ── Reconstruct planned moves by walking the came-from chain ──────────
     memset(v->planned_dx, 0, sizeof(v->planned_dx));
     memset(v->planned_dy, 0, sizeof(v->planned_dy));
+    memset(v->planned_turn, 0, sizeof(v->planned_turn));
 
     for (int tx = bx, ty = by, tt = bt; tt > 0;) {
         int idx = SIDX(tx, ty, tt);
         v->planned_dx[tt - 1] = cf[idx].mdx;
         v->planned_dy[tt - 1] = cf[idx].mdy;
+        v->planned_turn[tt - 1] = cf[idx].turn;
         int npx = cf[idx].px, npy = cf[idx].py, npt = cf[idx].pt;
         tx = npx; ty = npy; tt = npt;
     }
@@ -456,12 +469,19 @@ static int whca_astar(int vid) {
         ax += v->planned_dx[s - 1];
         ay += v->planned_dy[s - 1];
 
+        int cur_len = v->length;
+        int cur_wid = v->width;
+        if (v->planned_turn[s - 1]) {
+            cur_len = v->width;
+            cur_wid = v->length;
+        }
+
         int dx = v->planned_dx[s - 1];
         int dy = v->planned_dy[s - 1];
         int steps = abs(dx) + abs(dy);
         if (steps == 0) {
-            for (int i = 0; i < v->length; i++) {
-                for (int j = 0; j < v->width; j++) {
+            for (int i = 0; i < cur_len; i++) {
+                for (int j = 0; j < cur_wid; j++) {
                     int px = ax + i, py = ay + j;
                     if (px >= 0 && px < g_canvas_side &&
                         py >= 0 && py < g_canvas_side)
@@ -474,8 +494,8 @@ static int whca_astar(int vid) {
             for (int step = 0; step <= steps; step++) {
                 int ix = prev_x + sdx * step;
                 int iy = prev_y + sdy * step;
-                for (int i = 0; i < v->length; i++) {
-                    for (int j = 0; j < v->width; j++) {
+                for (int i = 0; i < cur_len; i++) {
+                    for (int j = 0; j < cur_wid; j++) {
                         int px = ix + i, py = iy + j;
                         if (px >= 0 && px < g_canvas_side &&
                             py >= 0 && py < g_canvas_side)
@@ -623,7 +643,12 @@ void run_animation(struct Road* roads, int num_roads,
         printf("\033[2J\033[H");
 
         double move_start_ms = monotonic_ms();
-        for (int i = 0; i < num_vehicles; i++) move_vehicle(&vehicles[i]);
+        for (int i = 0; i < num_vehicles; i++) {
+            if (vehicles[i].planned_turn[0]) {
+                turn_vehicle(&vehicles[i]);
+            }
+            move_vehicle(&vehicles[i]);
+        }
         double move_ms = monotonic_ms() - move_start_ms;
 
         double draw_start_ms = monotonic_ms();
@@ -637,15 +662,16 @@ void run_animation(struct Road* roads, int num_roads,
         printf("\n Step %2d / %d\n", step + 1, step_count);
         printf(" Timing: plan %.2f ms | move %.2f ms | draw %.2f ms | total %.2f ms\n",
                plan_ms, move_ms, draw_ms, step_ms);
-        printf(" %-3s %-5s %-17s %-13s %-10s %s\n",
-               "V", "Pri", "Position", "Goal", "Move", "Status");
-        printf(" ───────────────────────────────────────────────────────────\n");
+        printf(" %-3s %-9s %-9s %-19s %-13s %-10s %s\n",
+               "V", "Pri", "Size", "Position", "Goal", "Move", "Status");
+        printf(" ───────────────────────────────────────────────────────────────────────────\n");
         for (int i = 0; i < num_vehicles; i++) {
             int at_goal = (vehicles[i].x == vehicles[i].goal_x &&
                            vehicles[i].y == vehicles[i].goal_y);
-            printf(" \033[38;2;%d;%d;%dmV%2d\033[0m   %-4d (%2d,%2d)       (%2d,%2d)       (%+d,%+d)     %s\n",
+            printf(" \033[38;2;%d;%d;%dmV%2d\033[0m   %-4d (%2d,%2d)       (%2d,%2d)         (%2d,%2d)       (%+d,%+d)     %s\n",
                    vehicles[i].r, vehicles[i].g, vehicles[i].b, i,
                    vehicles[i].priority,
+                   vehicles[i].length, vehicles[i].width,
                    vehicles[i].x, vehicles[i].y,
                    vehicles[i].goal_x, vehicles[i].goal_y,
                    vehicles[i].dx, vehicles[i].dy,
@@ -1010,7 +1036,7 @@ int main(int argc, char *argv[]) {
         make_vehicle(&vehicles[14], 14, 24,   0,   0,   0,  0,  4,  1,  2,  3,  0,  5); // black
     }
     // Resize window: extra rows for HUD, extra cols for status text
-    resize_terminal(canvaSide + vehiNum + 10, canvaSide + 40);
+    resize_terminal(canvaSide + vehiNum + 10, canvaSide + 50);
 
     g_vehicles     = vehicles;
     g_num_vehicles = vehiNum;
