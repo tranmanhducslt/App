@@ -169,7 +169,6 @@ void move_vehicle(struct Vehicle* v) {
 int is_vehicle_ori_by_velo(struct Vehicle v){
     int abs_dx = abs(v.dx);
     int abs_dy = abs(v.dy);
-    // IMPORTANT: when vehicle stops, do not compare
     if (abs_dx > abs_dy) {
         return v.length >= v.width;
     } else if (abs_dy > abs_dx) {
