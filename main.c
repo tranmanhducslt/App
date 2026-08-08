@@ -166,6 +166,10 @@ void move_vehicle(struct Vehicle* v) {
     }
 }
 
+int is_vehicle_ori_by_velo(struct Vehicle v){
+    return (v.dx > v.dy && v.length > v.width) || (v.dy > v.dx && v.width > v.length);
+}
+
 int is_vehicle_on_road(struct Vehicle v, struct Road road){
     return (v.x >= road.x && v.x + v.length - 1 < road.x + road.length &&
             v.y >= road.y && v.y + v.width - 1 < road.y + road.width);
