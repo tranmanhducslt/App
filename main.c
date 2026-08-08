@@ -215,7 +215,7 @@ int is_vehicle_overlapping_others(struct Vehicle v, struct Vehicle* vehicles, in
 
 // ── Min-heap (open set for A*) ────────────────────────────────────────────
 
-typedef struct { int x, y, t, ori, g, f; } HNode;
+typedef struct { int x, y, t, ori, g, f; } HNode; // g = cost-so-far, f = g + h
 typedef struct { HNode* data; int size, cap; } MinHeap;
 
 static void mh_swap(MinHeap* h, int a, int b) {
