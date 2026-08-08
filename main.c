@@ -167,7 +167,15 @@ void move_vehicle(struct Vehicle* v) {
 }
 
 int is_vehicle_ori_by_velo(struct Vehicle v){
-    return (v.dx > v.dy && v.length > v.width) || (v.dy > v.dx && v.width > v.length);
+    int abs_dx = abs(v.dx);
+    int abs_dy = abs(v.dy);
+    // IMPORTANT: when vehicle stops, do not compare
+    if (abs_dx > abs_dy) {
+        return v.length >= v.width;
+    } else if (abs_dy > abs_dx) {
+        return v.width >= v.length;
+    }
+    return 1;
 }
 
 int is_vehicle_on_road(struct Vehicle v, struct Road road){
@@ -208,7 +216,7 @@ int is_vehicle_overlapping_others(struct Vehicle v, struct Vehicle* vehicles, in
 
 // ── Min-heap (open set for A*) ────────────────────────────────────────────
 
-typedef struct { int x, y, t, g, f; } HNode;
+typedef struct { int x, y, t, ori, g, f; } HNode;
 typedef struct { HNode* data; int size, cap; } MinHeap;
 
 static void mh_swap(MinHeap* h, int a, int b) {
@@ -240,20 +248,24 @@ static HNode mh_pop(MinHeap* h) {
 
 // ── Came-from table (path reconstruction) ────────────────────────────────
 
-// Records how we arrived at each (x, y, t) cell during A*.
-typedef struct { int px, py, pt, mdx, mdy, turn; } CFEntry;
+// Records how we arrived at each (x, y, t, ori) state during A*.
+typedef struct { int px, py, pt, pori, mdx, mdy, turn; } CFEntry;
 
-// Flat index into the (x, y, t) state space.
-#define SIDX(x, y, t) (((x) * g_canvas_side + (y)) * (g_max_lookahead + 1) + (t))
+// Flat index into the (x, y, t, ori) state space.
+#define SIDX(x, y, t, ori) (((((x) * g_canvas_side + (y)) * (g_max_lookahead + 1) + (t)) * 2) + (ori))
 
 // ── Collision predicate ───────────────────────────────────────────────────
 
 // Returns 1 iff vehicle vid's bounding box placed at anchor (ax, ay) is fully
 // within bounds, free of foreign reservations at timestep t, and entirely on roads.
-static int pos_free(int vid, int ax, int ay, int t, int need_turn) {
+// ori=0 uses vehicle's current (length, width), ori=1 uses swapped (width, length).
+static int pos_free(int vid, int ax, int ay, int t, int need_turn, int ori) {
     struct Vehicle* v = &g_vehicles[vid];
     
-    int length = v->length, width = v->width, max = (v->length > v->width) ? v->length : v->width;
+    int length = (ori == 0) ? v->length : v->width;
+    int width  = (ori == 0) ? v->width  : v->length;
+    int max = (length > width) ? length : width;
+    
     // At a turn, the bounding box is a square of side max(length, width).
     if (need_turn){
         length = max;
@@ -291,11 +303,6 @@ static int pos_free(int vid, int ax, int ay, int t, int need_turn) {
 
 // ── Spacetime A* for one vehicle ─────────────────────────────────────────
 
-// Plans vehicle vid's path to its goal within the current lookahead window.
-//   • Fills planned_dx[] / planned_dy[] with unit moves.
-//   • Reserves those cells in the shared spacetime grid.
-//   • Sets v->dx / v->dy to the first planned step (executed this tick).
-// Returns 1 if the goal is reachable within the window, 0 for a partial path.
 static int sign(int val) {
     return (val > 0) - (val < 0);
 }
@@ -343,101 +350,113 @@ static int whca_astar(int vid) {
     const int sx = v->x, sy = v->y;
     const int gx = v->goal_x, gy = v->goal_y;
 
-    int ns = g_canvas_side * g_canvas_side * (g_max_lookahead + 1);
+    int ns = g_canvas_side * g_canvas_side * (g_max_lookahead + 1) * 2;
 
     CFEntry* cf   = calloc(ns, sizeof(CFEntry));
     int*     gval = malloc(ns * sizeof(int));
     for (int i = 0; i < ns; i++) gval[i] = INT_MAX;
 
-    // Heap for the open set of A*; capacity = number of states in the search space
     MinHeap open = { malloc(ns * sizeof(HNode)), 0, ns };
 
-    // Seed the start state with an APF-guided heuristic.
     int h0 = apf_heuristic(sx, sy, gx, gy, vid);
-    gval[SIDX(sx, sy, 0)] = 0;
-    cf[SIDX(sx, sy, 0)].pt = -1;          // sentinel: no parent
-    mh_push(&open, (HNode){sx, sy, 0, 0, h0});
+    gval[SIDX(sx, sy, 0, 0)] = 0;
+    cf[SIDX(sx, sy, 0, 0)].pt = -1;
+    mh_push(&open, (HNode){sx, sy, 0, 0, 0, h0});
 
     int spd = abs(v->orig_dx) + abs(v->orig_dy);
-    if (spd == 0) spd = 1; // safeguard
+    if (spd == 0) spd = 1;
 
     int found = 0;
-    int bx = sx, by = sy, bt = 0; // best endpoint found (lowest h)
+    int bx = sx, by = sy, bt = 0, bori = 0;
     int bh = h0;
 
     while (open.size > 0) {
         HNode cur = mh_pop(&open);
-        int cx = cur.x, cy = cur.y, ct = cur.t;
+        int cx = cur.x, cy = cur.y, ct = cur.t, cori = cur.ori;
 
-        if (cur.g > gval[SIDX(cx, cy, ct)]) continue; // stale duplicate
+        if (cur.g > gval[SIDX(cx, cy, ct, cori)]) continue;
 
         if (cx == gx && cy == gy) {
-            // Goal reached within window
-            found = 1; bx = cx; by = cy; bt = ct;
+            found = 1; bx = cx; by = cy; bt = ct; bori = cori;
             break;
         }
 
-        // Track the node closest to goal as a fallback for partial paths
         int ch = abs(cx - gx) + abs(cy - gy);
-        if (ch < bh) { bh = ch; bx = cx; by = cy; bt = ct; }
+        if (ch < bh) { bh = ch; bx = cx; by = cy; bt = ct; bori = cori; }
 
-        if (ct >= g_max_lookahead) continue; // window exhausted, can't expand
+        if (ct >= g_max_lookahead) continue;
 
-        // 1. Wait action (move of 0 steps)
-        {
-            int nx = cx, ny = cy, nt = ct + 1;
-            int turn_needed = 0;
-            int valid = 1;
-            if (!pos_free(vid, nx, ny, nt, 0)) {
-                if (pos_free(vid, nx, ny, nt, 1)) {
-                    turn_needed = 1;
-                } else {
-                    valid = 0;
-                }
-            }
-            if (valid) {
-                int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
-                if (ng < gval[ni]) {
-                    gval[ni] = ng;
-                    cf[ni] = (CFEntry){ cx, cy, ct, 0, 0, turn_needed };
-                    int nh = apf_heuristic(nx, ny, gx, gy, vid);
-                    mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
-                }
-            }
-        }
+        int move_dx[17], move_dy[17];
+        int num_moves = 0;
 
-        // 2. Cardinal moves: up to speed 'spd' in each direction
+        move_dx[num_moves] = 0; move_dy[num_moves] = 0; num_moves++;
+
         const int dx_dir[] = { 1, -1,  0,  0 };
         const int dy_dir[] = { 0,  0,  1, -1 };
         for (int d = 0; d < 4; d++) {
             for (int k = 1; k <= spd; k++) {
-                int mx = dx_dir[d] * k;
-                int my = dy_dir[d] * k;
-                int nx = cx + mx, ny = cy + my, nt = ct + 1;
+                move_dx[num_moves] = dx_dir[d] * k;
+                move_dy[num_moves] = dy_dir[d] * k;
+                num_moves++;
+            }
+        }
 
-                // Check all cells swept through (Option B)
-                int possible = 1;
-                int turn_needed = 0;
-                for (int step = 1; step <= k; step++) {
-                    int ix = cx + dx_dir[d] * step;
-                    int iy = cy + dy_dir[d] * step;
-                    if (!pos_free(vid, ix, iy, nt, 0)) {
-                        if (pos_free(vid, ix, iy, nt, 1)) {
-                            turn_needed = 1;
-                        } else {
-                            possible = 0;
-                            break;
+        for (int m = 0; m < num_moves; m++) {
+            int mx = move_dx[m];
+            int my = move_dy[m];
+            int nx = cx + mx, ny = cy + my, nt = ct + 1;
+            int k = (mx == 0 && my == 0) ? 0 : (abs(mx) + abs(my));
+            int sdx = sign(mx), sdy = sign(my);
+
+            for (int turn_flag = 0; turn_flag <= 1; turn_flag++) {
+                int next_ori = turn_flag ? (1 - cori) : cori;
+                int next_len = (next_ori == 0) ? v->length : v->width;
+                int next_wid = (next_ori == 0) ? v->width  : v->length;
+
+                int valid = 1;
+
+                if (turn_flag) {
+                    if (!pos_free(vid, cx, cy, nt, 1, cori)) {
+                        valid = 0;
+                    }
+                }
+
+                if (valid) {
+                    if (k == 0) {
+                        if (!pos_free(vid, nx, ny, nt, 0, next_ori)) {
+                            valid = 0;
+                        }
+                    } else {
+                        for (int step = 1; step <= k; step++) {
+                            int ix = cx + sdx * step;
+                            int iy = cy + sdy * step;
+                            if (!pos_free(vid, ix, iy, nt, 0, next_ori)) {
+                                valid = 0;
+                                break;
+                            }
                         }
                     }
                 }
-                if (!possible) continue;
 
-                int ng = cur.g + 1, ni = SIDX(nx, ny, nt);
+                if (!valid) continue;
+
+                struct Vehicle temp_v;
+                temp_v.dx = mx;
+                temp_v.dy = my;
+                temp_v.length = next_len;
+                temp_v.width  = next_wid;
+
+                int oriented = is_vehicle_ori_by_velo(temp_v);
+                int cost_add = 1 + (turn_flag ? 1 : 0) + (oriented ? 0 : 20);
+
+                int ng = cur.g + cost_add;
+                int ni = SIDX(nx, ny, nt, next_ori);
+
                 if (ng < gval[ni]) {
                     gval[ni] = ng;
-                    cf[ni] = (CFEntry){ cx, cy, ct, mx, my, turn_needed };
+                    cf[ni] = (CFEntry){ cx, cy, ct, cori, mx, my, turn_flag };
                     int nh = apf_heuristic(nx, ny, gx, gy, vid);
-                    mh_push(&open, (HNode){ nx, ny, nt, ng, ng + nh });
+                    mh_push(&open, (HNode){ nx, ny, nt, next_ori, ng, ng + nh });
                 }
             }
         }
@@ -448,42 +467,59 @@ static int whca_astar(int vid) {
     memset(v->planned_dy, 0, sizeof(v->planned_dy));
     memset(v->planned_turn, 0, sizeof(v->planned_turn));
 
-    for (int tx = bx, ty = by, tt = bt; tt > 0;) {
-        int idx = SIDX(tx, ty, tt);
+    for (int tx = bx, ty = by, tt = bt, tori = bori; tt > 0;) {
+        int idx = SIDX(tx, ty, tt, tori);
         v->planned_dx[tt - 1] = cf[idx].mdx;
         v->planned_dy[tt - 1] = cf[idx].mdy;
         v->planned_turn[tt - 1] = cf[idx].turn;
-        int npx = cf[idx].px, npy = cf[idx].py, npt = cf[idx].pt;
-        tx = npx; ty = npy; tt = npt;
+        int npx = cf[idx].px, npy = cf[idx].py, npt = cf[idx].pt, npori = cf[idx].pori;
+        tx = npx; ty = npy; tt = npt; tori = npori;
     }
 
     // ── Reserve the planned path in the shared spacetime grid ─────────────
     int ax = sx, ay = sy;
+    int cur_ori = 0;
+    
     // Reserve at s = 0 (starting position)
-    for (int i = 0; i < v->length; i++) {
-        for (int j = 0; j < v->width; j++) {
+    int cur_len = v->length, cur_wid = v->width;
+    for (int i = 0; i < cur_len; i++) {
+        for (int j = 0; j < cur_wid; j++) {
             int px = ax + i, py = ay + j;
             if (px >= 0 && px < g_canvas_side &&
                 py >= 0 && py < g_canvas_side)
                 g_spacetime_grid[px][py][0] = vid + 1;
         }
     }
+
     // Reserve at s > 0 (subsequent timesteps)
     for (int s = 1; s <= g_max_lookahead; s++) {
         int prev_x = ax, prev_y = ay;
         ax += v->planned_dx[s - 1];
         ay += v->planned_dy[s - 1];
 
-        int cur_len = v->length;
-        int cur_wid = v->width;
         if (v->planned_turn[s - 1]) {
-            cur_len = v->width;
-            cur_wid = v->length;
+            cur_ori = 1 - cur_ori;
         }
+
+        cur_len = (cur_ori == 0) ? v->length : v->width;
+        cur_wid = (cur_ori == 0) ? v->width  : v->length;
 
         int dx = v->planned_dx[s - 1];
         int dy = v->planned_dy[s - 1];
         int steps = abs(dx) + abs(dy);
+
+        if (v->planned_turn[s - 1]) {
+            int max = (v->length > v->width) ? v->length : v->width;
+            for (int i = 0; i < max; i++) {
+                for (int j = 0; j < max; j++) {
+                    int px = prev_x + i, py = prev_y + j;
+                    if (px >= 0 && px < g_canvas_side &&
+                        py >= 0 && py < g_canvas_side)
+                        g_spacetime_grid[px][py][s] = vid + 1;
+                }
+            }
+        }
+
         if (steps == 0) {
             for (int i = 0; i < cur_len; i++) {
                 for (int j = 0; j < cur_wid; j++) {
@@ -554,6 +590,9 @@ void apply_whca_star(struct Road* roads, int num_roads) {
             // Vehicle has reached its goal: park it and hold the space for the
             // full window so it remains a hard obstacle for lower-priority peers.
             v->dx = v->dy = 0;
+            memset(v->planned_dx, 0, sizeof(v->planned_dx));
+            memset(v->planned_dy, 0, sizeof(v->planned_dy));
+            memset(v->planned_turn, 0, sizeof(v->planned_turn));
             for (int p = 0; p < v->num_pixels; p++)
                 v->pixels[p]->dx = v->pixels[p]->dy = 0;
             for (int s = 0; s <= g_max_lookahead; s++)
@@ -649,6 +688,14 @@ void run_animation(struct Road* roads, int num_roads,
 
         double move_start_ms = monotonic_ms();
         for (int i = 0; i < num_vehicles; i++) {
+            if (vehicles[i].x == vehicles[i].goal_x && vehicles[i].y == vehicles[i].goal_y) {
+                vehicles[i].dx = 0;
+                vehicles[i].dy = 0;
+                memset(vehicles[i].planned_dx, 0, sizeof(vehicles[i].planned_dx));
+                memset(vehicles[i].planned_dy, 0, sizeof(vehicles[i].planned_dy));
+                memset(vehicles[i].planned_turn, 0, sizeof(vehicles[i].planned_turn));
+                continue;
+            }
             if (vehicles[i].planned_turn[0]) {
                 turn_vehicle(&vehicles[i]);
             }
@@ -760,7 +807,6 @@ void generate_random_vehicles(struct Road* roads, int num_roads,
             }
 
             int dx = 0, dy = 0;
-            int speed = rand() % 3 + 1;
 
             struct Pixel p_start = rand_road_point(roads, num_roads);
             struct Pixel p_goal = rand_road_point(roads, num_roads);
