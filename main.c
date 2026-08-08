@@ -268,7 +268,7 @@ static int pos_free(int vid, int ax, int ay, int t, int need_turn) {
             }
         }
     }
-
+    
     // Check that the vehicle is entirely on roads
     struct Vehicle temp_v = *v;
     temp_v.x = ax;
@@ -281,7 +281,7 @@ static int pos_free(int vid, int ax, int ay, int t, int need_turn) {
     if (is_vehicle_overlapping_others(temp_v, g_vehicles, g_num_vehicles, vid)) {
         return 0;
     }
-
+    
     return 1;
 }
 
@@ -534,7 +534,7 @@ static int cmp_priority(const void* a, const void* b) {
 void apply_whca_star(struct Road* roads, int num_roads) {
     g_roads = roads;
     g_num_roads = num_roads;
-
+    
     clear_spacetime_grid();
 
     // Build priority-sorted planning order
@@ -550,9 +550,6 @@ void apply_whca_star(struct Road* roads, int num_roads) {
             // Vehicle has reached its goal: park it and hold the space for the
             // full window so it remains a hard obstacle for lower-priority peers.
             v->dx = v->dy = 0;
-            memset(v->planned_dx, 0, sizeof(v->planned_dx));
-            memset(v->planned_dy, 0, sizeof(v->planned_dy));
-            memset(v->planned_turn, 0, sizeof(v->planned_turn)); // Reset turn flag
             for (int p = 0; p < v->num_pixels; p++)
                 v->pixels[p]->dx = v->pixels[p]->dy = 0;
             for (int s = 0; s <= g_max_lookahead; s++)
@@ -648,9 +645,7 @@ void run_animation(struct Road* roads, int num_roads,
 
         double move_start_ms = monotonic_ms();
         for (int i = 0; i < num_vehicles; i++) {
-            int at_goal = (vehicles[i].x == vehicles[i].goal_x &&
-                        vehicles[i].y == vehicles[i].goal_y);
-            if (vehicles[i].planned_turn[0] && !at_goal) {
+            if (vehicles[i].planned_turn[0]) {
                 turn_vehicle(&vehicles[i]);
             }
             move_vehicle(&vehicles[i]);
@@ -888,7 +883,7 @@ int main(int argc, char *argv[]) {
                     vehiNum = atoi(argv[i+1]);
                     if (vehiNum < 0) {
                         vehiNum = 15;
-                    }
+                    } 
                 }
             }
         }
@@ -899,7 +894,7 @@ int main(int argc, char *argv[]) {
                     stepCount = atoi(argv[i+1]);
                     if (stepCount < 0) {
                         stepCount = 30;
-                    }
+                    } 
                 }
             }
         }
@@ -910,7 +905,7 @@ int main(int argc, char *argv[]) {
                     maxSteps = atoi(argv[i+1]);
                     if (maxSteps < 0) {
                         maxSteps = 5;
-                    }
+                    } 
                 }
             }
         }
@@ -922,9 +917,9 @@ int main(int argc, char *argv[]) {
     struct Vehicle vehicles[vehiNum];
 
     // Road layout
-    make_road(&roads[0],  0,  5, 30,  4);
-    make_road(&roads[1], 10,  0,  6, 30);
-    make_road(&roads[2], 10, 12, 20,  4);
+    make_road(&roads[0],  0,  5, 30,  4); 
+    make_road(&roads[1], 10,  0,  6, 30); 
+    make_road(&roads[2], 10, 12, 20,  4); 
     make_road(&roads[3], 20,  5,  4, 25);
     make_road(&roads[4],  0, 27, 30,  2);
     make_road(&roads[5],  0, 20, 24,  2);
