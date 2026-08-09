@@ -8,8 +8,8 @@
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: #f8fafc;
+            color: #0f172a;
             margin: 0;
             padding: 40px 20px;
         }
@@ -23,11 +23,12 @@
         }
         h1 {
             font-size: 2.5rem;
-            color: #38bdf8;
+            color: #0284c7;
             margin-bottom: 10px;
+            font-weight: 700;
         }
         p.subtitle {
-            color: #94a3b8;
+            color: #475569;
             font-size: 1.1rem;
         }
         .grid {
@@ -42,36 +43,45 @@
             }
         }
         .card {
-            background-color: #1e293b;
+            background-color: #ffffff;
             border-radius: 12px;
             padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
         }
         h2 {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             margin-top: 0;
             margin-bottom: 20px;
-            color: #f1f5f9;
-            border-bottom: 2px solid #334155;
+            color: #0f172a;
+            border-bottom: 2px solid #f1f5f9;
             padding-bottom: 10px;
+            font-weight: 600;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         th, td {
-            padding: 12px;
+            padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #334155;
+            border-bottom: 1px solid #e2e8f0;
         }
         th {
-            color: #38bdf8;
+            background-color: #f1f5f9;
+            color: #0369a1;
             font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
         tr:hover {
-            background-color: #1e293b;
+            background-color: #f8fafc;
+        }
+        td {
+            color: #334155;
+            font-size: 0.95rem;
         }
     </style>
 </head>
@@ -181,13 +191,13 @@
                 datasets: [{
                     label: 'Mean Success Rate',
                     data: summaryData.map(d => d.mean_success_rate),
-                    borderColor: '#06b6d4',
-                    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                    borderColor: '#0284c7',
+                    backgroundColor: 'rgba(2, 132, 199, 0.08)',
                     tension: 0.1,
                     fill: true,
                     borderWidth: 3,
                     pointRadius: 6,
-                    pointBackgroundColor: '#06b6d4'
+                    pointBackgroundColor: '#0284c7'
                 }]
             },
             options: {
@@ -200,18 +210,18 @@
                             callback: function(value) {
                                 return (value * 100) + '%';
                             },
-                            color: '#94a3b8'
+                            color: '#475569'
                         },
-                        grid: { color: '#334155' }
+                        grid: { color: '#e2e8f0' }
                     },
                     x: {
-                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'maxSteps', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: '#f8fafc' } }
+                    legend: { labels: { color: '#0f172a' } }
                 }
             }
         });
@@ -225,31 +235,31 @@
                 datasets: [{
                     label: 'Mean Planning Time (ms)',
                     data: summaryData.map(d => d.mean_plan_time_ms),
-                    borderColor: '#f43f5e',
-                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    borderColor: '#e11d48',
+                    backgroundColor: 'rgba(225, 29, 72, 0.08)',
                     tension: 0.1,
                     fill: true,
                     borderWidth: 3,
                     pointRadius: 6,
-                    pointBackgroundColor: '#f43f5e'
+                    pointBackgroundColor: '#e11d48'
                 }]
             },
             options: {
                 responsive: true,
                 scales: {
                     y: {
-                        title: { display: true, text: 'ms per tick', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'ms per tick', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     },
                     x: {
-                        title: { display: true, text: 'maxSteps', color: '#94a3b8' },
-                        ticks: { color: '#94a3b8' },
-                        grid: { color: '#334155' }
+                        title: { display: true, text: 'maxSteps', color: '#475569' },
+                        ticks: { color: '#475569' },
+                        grid: { color: '#e2e8f0' }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: '#f8fafc' } }
+                    legend: { labels: { color: '#0f172a' } }
                 }
             }
         });
