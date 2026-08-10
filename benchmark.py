@@ -5,10 +5,16 @@ import os
 import math
 import json
 
-# Configuration
+# Configuration for Test 1: Lookahead Window Size Benchmark
 MAX_STEPS_LIST = [2, 4, 8, 12, 16, 24, 32]
+FIXED_VEHICLE_COUNT = 15
+
+# Configuration for Test 2: Vehicle Density Benchmark
+VEHICLE_COUNT_LIST = [5, 10, 15, 20, 25, 30, 35, 40]
+FIXED_LOOKAHEAD = 8
+
+# Shared parameters
 TRIALS_PER_CONFIG = 15
-VEHICLE_COUNT = 15
 SIM_STEPS = 50
 
 def create_headless_source():
@@ -41,25 +47,23 @@ def compile_headless():
     print("Compiling headless binary...")
     subprocess.run(["gcc", "-O3", "main_headless.c", "-o", "main_headless"], check=True)
 
-def run_benchmark():
+def run_lookahead_benchmark():
+    print("\n=== Running Test 1: Lookahead Window Size Benchmark ===")
     raw_results = []
     
     for max_steps in MAX_STEPS_LIST:
         for trial in range(TRIALS_PER_CONFIG):
-            print(f"Running lookahead={max_steps}, trial={trial+1}/{TRIALS_PER_CONFIG}...")
-            # Run simulation with --random and --lookahead
-            cmd = ["./main_headless", "--random", str(VEHICLE_COUNT), "--steps", str(SIM_STEPS), "--lookahead", str(max_steps), "--child"]
+            print(f"[Test 1] Running lookahead={max_steps}, trial={trial+1}/{TRIALS_PER_CONFIG}...")
+            cmd = ["./main_headless", "--random", str(FIXED_VEHICLE_COUNT), "--steps", str(SIM_STEPS), "--lookahead", str(max_steps), "--child"]
             proc = subprocess.run(cmd, capture_output=True, text=True)
             output = proc.stdout
             
-            # Parse planning times per tick
             plan_times = [float(x) for x in re.findall(r"plan (\d+\.\d+) ms", output)]
             avg_plan_time = sum(plan_times) / len(plan_times) if plan_times else 0.0
             
-            # Parse number of vehicles that reached goal
             final_section = output.split("───────────────────────────────────────────────────────────")[-1]
             goals_reached = len(re.findall(r"✔ GOAL", final_section))
-            success_rate = goals_reached / VEHICLE_COUNT
+            success_rate = goals_reached / FIXED_VEHICLE_COUNT
             
             raw_results.append({
                 "maxSteps": max_steps,
@@ -69,16 +73,49 @@ def run_benchmark():
                 "goals_reached": goals_reached
             })
             
-    # Save CSV
     csv_file = "benchmark_results.csv"
     with open(csv_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["maxSteps", "trial", "avg_plan_time_ms", "success_rate", "goals_reached"])
         writer.writeheader()
         writer.writerows(raw_results)
-    print(f"CSV results saved to {csv_file}")
+    print(f"Test 1 CSV results saved to {csv_file}")
     return raw_results
 
-def compute_statistics(raw_results):
+def run_vehicles_benchmark():
+    print("\n=== Running Test 2: Vehicle Density Benchmark ===")
+    raw_results = []
+    
+    for v_count in VEHICLE_COUNT_LIST:
+        for trial in range(TRIALS_PER_CONFIG):
+            print(f"[Test 2] Running vehicle_count={v_count}, trial={trial+1}/{TRIALS_PER_CONFIG}...")
+            cmd = ["./main_headless", "--random", str(v_count), "--steps", str(SIM_STEPS), "--lookahead", str(FIXED_LOOKAHEAD), "--child"]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            output = proc.stdout
+            
+            plan_times = [float(x) for x in re.findall(r"plan (\d+\.\d+) ms", output)]
+            avg_plan_time = sum(plan_times) / len(plan_times) if plan_times else 0.0
+            
+            final_section = output.split("───────────────────────────────────────────────────────────")[-1]
+            goals_reached = len(re.findall(r"✔ GOAL", final_section))
+            success_rate = goals_reached / v_count if v_count > 0 else 0.0
+            
+            raw_results.append({
+                "vehicleCount": v_count,
+                "trial": trial,
+                "avg_plan_time_ms": avg_plan_time,
+                "success_rate": success_rate,
+                "goals_reached": goals_reached
+            })
+            
+    csv_file = "benchmark_vehicles_results.csv"
+    with open(csv_file, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["vehicleCount", "trial", "avg_plan_time_ms", "success_rate", "goals_reached"])
+        writer.writeheader()
+        writer.writerows(raw_results)
+    print(f"Test 2 CSV results saved to {csv_file}")
+    return raw_results
+
+def compute_statistics_lookahead(raw_results):
     stats = {}
     for r in raw_results:
         ms = r["maxSteps"]
@@ -92,12 +129,10 @@ def compute_statistics(raw_results):
         s_list = stats[ms]["success_rates"]
         p_list = stats[ms]["plan_times"]
         
-        # Success rate stats
         mean_s = sum(s_list) / len(s_list)
         var_s = sum((x - mean_s) ** 2 for x in s_list) / (len(s_list) - 1) if len(s_list) > 1 else 0.0
         ci_s = 1.96 * math.sqrt(var_s / len(s_list)) if len(s_list) > 0 else 0.0
         
-        # Plan time stats
         mean_p = sum(p_list) / len(p_list)
         var_p = sum((x - mean_p) ** 2 for x in p_list) / (len(p_list) - 1) if len(p_list) > 1 else 0.0
         ci_p = 1.96 * math.sqrt(var_p / len(p_list)) if len(p_list) > 0 else 0.0
@@ -111,7 +146,38 @@ def compute_statistics(raw_results):
         })
     return summary
 
-def generate_html_dashboard(summary):
+def compute_statistics_vehicles(raw_results):
+    stats = {}
+    for r in raw_results:
+        vc = r["vehicleCount"]
+        if vc not in stats:
+            stats[vc] = {"success_rates": [], "plan_times": []}
+        stats[vc]["success_rates"].append(r["success_rate"])
+        stats[vc]["plan_times"].append(r["avg_plan_time_ms"])
+        
+    summary = []
+    for vc in VEHICLE_COUNT_LIST:
+        s_list = stats[vc]["success_rates"]
+        p_list = stats[vc]["plan_times"]
+        
+        mean_s = sum(s_list) / len(s_list)
+        var_s = sum((x - mean_s) ** 2 for x in s_list) / (len(s_list) - 1) if len(s_list) > 1 else 0.0
+        ci_s = 1.96 * math.sqrt(var_s / len(s_list)) if len(s_list) > 0 else 0.0
+        
+        mean_p = sum(p_list) / len(p_list)
+        var_p = sum((x - mean_p) ** 2 for x in p_list) / (len(p_list) - 1) if len(p_list) > 1 else 0.0
+        ci_p = 1.96 * math.sqrt(var_p / len(p_list)) if len(p_list) > 0 else 0.0
+        
+        summary.append({
+            "vehicleCount": vc,
+            "mean_success_rate": mean_s,
+            "ci_success_rate": ci_s,
+            "mean_plan_time_ms": mean_p,
+            "ci_plan_time_ms": ci_p
+        })
+    return summary
+
+def generate_html_dashboard(summary_lookahead, summary_vehicles):
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -145,11 +211,28 @@ def generate_html_dashboard(summary):
             color: #475569;
             font-size: 1.1rem;
         }}
+        .section-header {{
+            margin-top: 50px;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #0284c7;
+        }}
+        .section-title {{
+            font-size: 1.8rem;
+            color: #0f172a;
+            margin: 0 0 8px 0;
+            font-weight: 700;
+        }}
+        .section-desc {{
+            color: #64748b;
+            font-size: 1rem;
+            margin: 0;
+        }}
         .grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
         }}
         @media (max-width: 900px) {{
             .grid {{
@@ -162,6 +245,7 @@ def generate_html_dashboard(summary):
             padding: 24px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
         }}
         h2 {{
             font-size: 1.3rem;
@@ -202,23 +286,29 @@ def generate_html_dashboard(summary):
 <body>
     <div class="container">
         <header>
-            <h1>WHCA* Lookahead Benchmark</h1>
-            <p class="subtitle">Statistical evaluation of vehicle behavior and computational complexity under varying lookahead window sizes (maxSteps).</p>
+            <h1>WHCA* Performance Dashboard</h1>
+            <p class="subtitle">Comprehensive statistical evaluation of pathfinding efficiency across varying lookahead windows and vehicle densities.</p>
         </header>
+
+        <!-- Test 1: Lookahead Benchmark -->
+        <div class="section-header">
+            <h2 class="section-title">Test 1: Lookahead Horizon Benchmark (maxSteps)</h2>
+            <p class="section-desc">Evaluates algorithm performance under varying lookahead window sizes (maxSteps) with a fixed density of {FIXED_VEHICLE_COUNT} vehicles.</p>
+        </div>
 
         <div class="grid">
             <div class="card">
                 <h2>Goal Success Rate (%) vs. maxSteps</h2>
-                <canvas id="successChart"></canvas>
+                <canvas id="successChartLookahead"></canvas>
             </div>
             <div class="card">
                 <h2>Planning Time (ms/tick) vs. maxSteps</h2>
-                <canvas id="timeChart"></canvas>
+                <canvas id="timeChartLookahead"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <h2>Statistical Summary Table</h2>
+            <h2>Test 1 Statistical Summary Table</h2>
             <table>
                 <thead>
                     <tr>
@@ -238,25 +328,68 @@ def generate_html_dashboard(summary):
                         <td>{item["mean_plan_time_ms"]:.3f} ms</td>
                         <td>&plusmn; {item["ci_plan_time_ms"]:.3f} ms</td>
                     </tr>
-                    ''' for item in summary)}
+                    ''' for item in summary_lookahead)}
                 </tbody>
             </table>
         </div>
+
+        <!-- Test 2: Vehicle Density Benchmark -->
+        <div class="section-header">
+            <h2 class="section-title">Test 2: Vehicle Density Benchmark (Random Vehicle Count)</h2>
+            <p class="section-desc">Evaluates algorithm scalability and path completion success when scaling the number of randomly generated vehicles (random parameter) at a fixed lookahead horizon of {FIXED_LOOKAHEAD} steps.</p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Goal Success Rate (%) vs. Vehicle Count</h2>
+                <canvas id="successChartVehicles"></canvas>
+            </div>
+            <div class="card">
+                <h2>Planning Time (ms/tick) vs. Vehicle Count</h2>
+                <canvas id="timeChartVehicles"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Test 2 Statistical Summary Table</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Vehicle Count (random)</th>
+                        <th>Mean Success Rate</th>
+                        <th>95% Confidence Interval (Success)</th>
+                        <th>Mean Planning Time (ms/tick)</th>
+                        <th>95% Confidence Interval (Time)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {"".join(f'''
+                    <tr>
+                        <td><strong>{item["vehicleCount"]}</strong></td>
+                        <td>{item["mean_success_rate"] * 100:.1f}%</td>
+                        <td>&plusmn; {item["ci_success_rate"] * 100:.1f}%</td>
+                        <td>{item["mean_plan_time_ms"]:.3f} ms</td>
+                        <td>&plusmn; {item["ci_plan_time_ms"]:.3f} ms</td>
+                    </tr>
+                    ''' for item in summary_vehicles)}
+                </tbody>
+            </table>
+        </div>
+
     </div>
 
     <script>
-        const summaryData = {json.dumps(summary)};
-        const labels = summaryData.map(d => d.maxSteps);
+        const summaryLookahead = {json.dumps(summary_lookahead)};
+        const labelsLookahead = summaryLookahead.map(d => d.maxSteps);
         
-        // Success Chart
-        const successCtx = document.getElementById('successChart').getContext('2d');
-        new Chart(successCtx, {{
+        // Test 1: Success Chart
+        new Chart(document.getElementById('successChartLookahead').getContext('2d'), {{
             type: 'line',
             data: {{
-                labels: labels,
+                labels: labelsLookahead,
                 datasets: [{{
                     label: 'Mean Success Rate',
-                    data: summaryData.map(d => d.mean_success_rate),
+                    data: summaryLookahead.map(d => d.mean_success_rate),
                     borderColor: '#0284c7',
                     backgroundColor: 'rgba(2, 132, 199, 0.08)',
                     tension: 0.1,
@@ -270,14 +403,8 @@ def generate_html_dashboard(summary):
                 responsive: true,
                 scales: {{
                     y: {{
-                        min: 0,
-                        max: 1.0,
-                        ticks: {{
-                            callback: function(value) {{
-                                return (value * 100) + '%';
-                            }},
-                            color: '#475569'
-                        }},
+                        min: 0, max: 1.0,
+                        ticks: {{ callback: value => (value * 100) + '%', color: '#475569' }},
                         grid: {{ color: '#e2e8f0' }}
                     }},
                     x: {{
@@ -286,21 +413,18 @@ def generate_html_dashboard(summary):
                         grid: {{ color: '#e2e8f0' }}
                     }}
                 }},
-                plugins: {{
-                    legend: {{ labels: {{ color: '#0f172a' }} }}
-                }}
+                plugins: {{ legend: {{ labels: {{ color: '#0f172a' }} }} }}
             }}
         }});
 
-        // Planning Time Chart
-        const timeCtx = document.getElementById('timeChart').getContext('2d');
-        new Chart(timeCtx, {{
+        // Test 1: Planning Time Chart
+        new Chart(document.getElementById('timeChartLookahead').getContext('2d'), {{
             type: 'line',
             data: {{
-                labels: labels,
+                labels: labelsLookahead,
                 datasets: [{{
                     label: 'Mean Planning Time (ms)',
-                    data: summaryData.map(d => d.mean_plan_time_ms),
+                    data: summaryLookahead.map(d => d.mean_plan_time_ms),
                     borderColor: '#e11d48',
                     backgroundColor: 'rgba(225, 29, 72, 0.08)',
                     tension: 0.1,
@@ -324,9 +448,80 @@ def generate_html_dashboard(summary):
                         grid: {{ color: '#e2e8f0' }}
                     }}
                 }},
-                plugins: {{
-                    legend: {{ labels: {{ color: '#0f172a' }} }}
-                }}
+                plugins: {{ legend: {{ labels: {{ color: '#0f172a' }} }} }}
+            }}
+        }});
+
+        const summaryVehicles = {json.dumps(summary_vehicles)};
+        const labelsVehicles = summaryVehicles.map(d => d.vehicleCount);
+        
+        // Test 2: Success Chart
+        new Chart(document.getElementById('successChartVehicles').getContext('2d'), {{
+            type: 'line',
+            data: {{
+                labels: labelsVehicles,
+                datasets: [{{
+                    label: 'Mean Success Rate',
+                    data: summaryVehicles.map(d => d.mean_success_rate),
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+                    tension: 0.1,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#059669'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                scales: {{
+                    y: {{
+                        min: 0, max: 1.0,
+                        ticks: {{ callback: value => (value * 100) + '%', color: '#475569' }},
+                        grid: {{ color: '#e2e8f0' }}
+                    }},
+                    x: {{
+                        title: {{ display: true, text: 'Random Vehicle Count', color: '#475569' }},
+                        ticks: {{ color: '#475569' }},
+                        grid: {{ color: '#e2e8f0' }}
+                    }}
+                }},
+                plugins: {{ legend: {{ labels: {{ color: '#0f172a' }} }} }}
+            }}
+        }});
+
+        // Test 2: Planning Time Chart
+        new Chart(document.getElementById('timeChartVehicles').getContext('2d'), {{
+            type: 'line',
+            data: {{
+                labels: labelsVehicles,
+                datasets: [{{
+                    label: 'Mean Planning Time (ms)',
+                    data: summaryVehicles.map(d => d.mean_plan_time_ms),
+                    borderColor: '#d97706',
+                    backgroundColor: 'rgba(217, 119, 6, 0.08)',
+                    tension: 0.1,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#d97706'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                scales: {{
+                    y: {{
+                        title: {{ display: true, text: 'ms per tick', color: '#475569' }},
+                        ticks: {{ color: '#475569' }},
+                        grid: {{ color: '#e2e8f0' }}
+                    }},
+                    x: {{
+                        title: {{ display: true, text: 'Random Vehicle Count', color: '#475569' }},
+                        ticks: {{ color: '#475569' }},
+                        grid: {{ color: '#e2e8f0' }}
+                    }}
+                }},
+                plugins: {{ legend: {{ labels: {{ color: '#0f172a' }} }} }}
             }}
         }});
     </script>
@@ -343,9 +538,16 @@ if __name__ == "__main__":
     try:
         create_headless_source()
         compile_headless()
-        raw_data = run_benchmark()
-        summary_stats = compute_statistics(raw_data)
-        generate_html_dashboard(summary_stats)
+        
+        # Test 1: Lookahead Horizon Benchmark
+        raw_lookahead = run_lookahead_benchmark()
+        summary_lookahead = compute_statistics_lookahead(raw_lookahead)
+        
+        # Test 2: Vehicle Density Benchmark
+        raw_vehicles = run_vehicles_benchmark()
+        summary_vehicles = compute_statistics_vehicles(raw_vehicles)
+        
+        generate_html_dashboard(summary_lookahead, summary_vehicles)
     finally:
         # Cleanup temporary files
         if os.path.exists("main_headless.c"):

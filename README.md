@@ -38,4 +38,4 @@ python3 benchmark.py
 ```
 * Information is stored in a .csv file, which is connected to the .html file that can be opened in a supporting web browser.
 
-*Created by Duc Tran in July 2026*
+*Created by Duc Tran in July and August 2026*
