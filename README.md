@@ -4,13 +4,13 @@ Final thesis to figure out a method for self-driving cars connecting to signal t
 
 * **main.c** stores the main program.
 * **benchmark.py** stores the testing program.
-* **benchmark_results.csv** stores its results.
-* **performance_dashboard.html** formats it visually.
+* **benchmark_results.csv** and **benchmark_vehicles_results.csv** store its results.
+* **performance_dashboard.html** formats them visually.
 
 ## Main program
 
 To run:
-* Install a C compiler if needed (e.g., gcc).
+* Install a C compiler if needed (e.g., gcc or clang).
 * Compile the main program:
 ```
 gcc main.c -o main
@@ -18,7 +18,7 @@ gcc main.c -o main
 * Run the program with attributes as desired:
     * random: Number of vehicles; default = 15.
     * steps: Number of simulation steps; default = 30.
-    * lookahead: Number of future steps for each vehicle to plan each step; default = 5.
+    * lookahead: Number of future steps for planning in each turn; default = 5.
 ```
 ./main
 ```
