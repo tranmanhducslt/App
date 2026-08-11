@@ -18,7 +18,7 @@ gcc main.c -o main
 * Run the program with attributes as desired:
     * random: Number of vehicles; default = 15.
     * steps: Number of simulation steps; default = 30.
-    * lookahead: Number of steps to plan each step; default = 5.
+    * lookahead: Number of future steps for each vehicle to plan each step; default = 5.
 ```
 ./main
 ```
