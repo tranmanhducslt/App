@@ -60,6 +60,9 @@ int*** g_spacetime_grid = NULL;
 int   g_canvas_side     = 0;
 int   g_max_lookahead   = 0;
 
+// Route backup grid 
+int*** g_route_backup = NULL;
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Spacetime Grid
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -671,10 +674,47 @@ void draw_scene(struct Road* roads, int num_roads,
     }
 }
 
+void store_routes(int step){
+    for (int i = 0; i < g_num_vehicles; ++i){
+        g_route_backup[i][step][0] = g_vehicles[i].x;
+        g_route_backup[i][step][1] = g_vehicles[i].y;
+    }
+}
+
+// Display all results from store_routes in routes.txt. 
+// Each vehicle is listed as an array with all of its coordinates in step order
+void print_routes(int step_count){
+    FILE *file = fopen("routes.txt", "w"); 
+    fprintf(file, "[");
+    for (int i = 0; i < g_num_vehicles; ++i){
+        fprintf(file, "[");
+        for (int j = 0; j < step_count; ++j){
+            fprintf(file, "[%d, %d]", g_route_backup[i][j][0], g_route_backup[i][j][1]);
+            if (j < step_count - 1){
+                fprintf(file, ", ");
+            }
+        }
+        fprintf(file, "]");
+        if (i < g_num_vehicles - 1){
+            fprintf(file, ", \n");
+        }
+    }
+    fprintf(file, "]\n");
+    fclose(file);
+}
+
 void run_animation(struct Road* roads, int num_roads,
                    struct Vehicle* vehicles, int num_vehicles,
                    int side, int step_count) {
     double total_runtime_ms = 0.0;
+
+    g_route_backup = malloc(num_vehicles * sizeof(int**));
+    for (int i = 0; i < num_vehicles; i++) {
+        g_route_backup[i] = malloc(step_count * sizeof(int*));
+        for (int j = 0; j < step_count; j++) {
+            g_route_backup[i][j] = malloc(2 * sizeof(int));
+        }
+    }
 
     for (int step = 0; step < step_count; step++) {
         double step_start_ms = monotonic_ms();
@@ -727,11 +767,13 @@ void run_animation(struct Road* roads, int num_roads,
                    vehicles[i].goal_x, vehicles[i].goal_y,
                    vehicles[i].dx, vehicles[i].dy,
                    at_goal ? "\033[32m✔ GOAL\033[0m" : "en route");
+            
         }
-
+        store_routes(step);
         usleep(300000);
     }
 
+    print_routes(step_count);
     printf("\nTotal animation runtime: %.2f ms (avg per step: %.2f ms)\n",
            total_runtime_ms, total_runtime_ms / step_count);
 }
