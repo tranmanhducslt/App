@@ -36,6 +36,6 @@ To run:
 ```
 python3 benchmark.py
 ```
-* Information is stored in a .csv file, which is connected to the .html file that can be opened in a supporting web browser.
+* Information is stored in a .csv file, which is connected to the .html file that can be opened in a supporting web browser (e.g., Firefox or Chrome).
 
 *Created by Duc Tran in July and August 2026*
