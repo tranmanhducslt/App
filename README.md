@@ -6,6 +6,7 @@ Final thesis to figure out a method for self-driving cars connecting to signal t
 * **benchmark.py** stores the testing program.
 * **benchmark_results.csv** and **benchmark_vehicles_results.csv** store its results.
 * **performance_dashboard.html** formats them visually.
+* **routes.txt** saves the overall route of each vehicle in the latest run.
 
 ## Main program
 
