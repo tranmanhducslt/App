@@ -1,6 +1,5 @@
 # App (VANET)
-
-Final thesis to figure out a method for self-driving cars connecting to signal transmitters on the road.
+Bachelor thesis to figure out a method for self-driving cars connecting to signal transmitters on the road.
 
 * `main.c` stores the main program.
 * `benchmark.py` stores the testing program.
